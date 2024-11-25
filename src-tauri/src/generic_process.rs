@@ -1,10 +1,11 @@
-use crate::generic_resource::GenericResource;
+use nanoid::nanoid;
 use rand::Rng;
 use std::marker::PhantomData;
 
+use crate::GenericResource;
+
 #[non_exhaustive]
 #[derive(Clone, PartialEq, Copy, serde::Serialize, serde::Deserialize)]
-
 pub enum GenericProcessResourceIntensity {
     None = 0,
     Low = 1,
@@ -13,10 +14,10 @@ pub enum GenericProcessResourceIntensity {
     Extreme = 8,
 }
 
-#[derive(Clone, PartialEq, Copy, serde::Serialize)]
-
+#[derive(Clone, PartialEq, serde::Serialize)]
 pub struct ResourceSlot<'a> {
     resource: &'a GenericResource,
+    id: String,
     current_amount: u64,
     base_amount: u64,
 }
@@ -27,11 +28,12 @@ impl<'a> ResourceSlot<'a> {
             resource,
             current_amount: base_amount,
             base_amount,
+            id: nanoid!(7),
         }
     }
 }
 
-#[derive(Clone, PartialEq, Copy, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Process<'a> {
     _marker: PhantomData<&'a ()>,
 }
@@ -39,6 +41,7 @@ pub struct Process<'a> {
 #[derive(Clone, PartialEq, serde::Serialize)]
 pub struct ReadyProcess<'a> {
     name: String,
+    id: String,
     resource_intensity: GenericProcessResourceIntensity,
     resource_slot: Vec<ResourceSlot<'a>>,
 }
@@ -46,6 +49,7 @@ pub struct ReadyProcess<'a> {
 #[derive(Clone, PartialEq, serde::Serialize)]
 pub struct BlockedProcess<'a> {
     name: String,
+    id: String,
     resource_intensity: GenericProcessResourceIntensity,
     resource_slot: Vec<ResourceSlot<'a>>,
 }
@@ -53,6 +57,7 @@ pub struct BlockedProcess<'a> {
 #[derive(Clone, PartialEq, serde::Serialize)]
 pub struct WorkingProcess<'a> {
     name: String,
+    id: String,
     resource_intensity: GenericProcessResourceIntensity,
     resource_slot: Vec<ResourceSlot<'a>>,
 }
@@ -68,6 +73,7 @@ impl<'a> Process<'a> {
             name,
             resource_intensity,
             resource_slot: resource_list,
+            id: nanoid!(7),
         }
     }
 }
@@ -80,6 +86,7 @@ pub trait AllProcessTraits<'a> {
     fn set_name(&mut self, name: String);
     fn set_resource_intensity(&mut self, resource_intensity: GenericProcessResourceIntensity);
     fn should_perform_action(&self) -> bool;
+    fn id(&self) -> &String;
 }
 
 macro_rules! impl_AllProcessTraits {
@@ -98,6 +105,10 @@ macro_rules! impl_AllProcessTraits {
                     }
                     None => None,
                 }
+            }
+
+            fn id(&self) -> &String {
+                &self.id
             }
 
             fn resource_slot_mut(&mut self) -> &mut Vec<ResourceSlot<'a>> {
@@ -160,6 +171,7 @@ impl<'a> ReadyProcess<'a> {
             name: self.name,
             resource_intensity: self.resource_intensity,
             resource_slot: self.resource_slot,
+            id: self.id,
         }
     }
 
@@ -168,6 +180,7 @@ impl<'a> ReadyProcess<'a> {
             name: self.name,
             resource_intensity: self.resource_intensity,
             resource_slot: self.resource_slot,
+            id: self.id,
         }
     }
 }
@@ -178,6 +191,7 @@ impl<'a> BlockedProcess<'a> {
             name: self.name,
             resource_intensity: self.resource_intensity,
             resource_slot: self.resource_slot,
+            id: self.id,
         }
     }
 }
@@ -188,10 +202,12 @@ impl<'a> WorkingProcess<'a> {
             name: self.name,
             resource_intensity: self.resource_intensity,
             resource_slot: self.resource_slot,
+            id: self.id,
         }
     }
 }
 
+#[derive(Clone, PartialEq, serde::Serialize)]
 pub enum ProcessStates<'a> {
     Ready(ReadyProcess<'a>),
     Blocked(BlockedProcess<'a>),
@@ -204,57 +220,4 @@ pub fn create_process<'a>(
     resource_intensity: GenericProcessResourceIntensity,
 ) -> ReadyProcess<'a> {
     Process::new(name, resource_intensity)
-}
-
-#[tauri::command]
-pub fn process_remove_resource<'a>(
-    process: &mut ProcessStates<'a>,
-    resource: &'a GenericResource,
-) -> Option<()> {
-    match process {
-        ProcessStates::Ready(process) => process.remove_resource(resource),
-        ProcessStates::Blocked(process) => process.remove_resource(resource),
-        ProcessStates::Working(process) => process.remove_resource(resource),
-    }
-}
-
-#[tauri::command]
-pub fn process_name<'a>(process: &ProcessStates<'a>) -> String {
-    match process {
-        ProcessStates::Ready(process) => process.name().to_string(),
-        ProcessStates::Blocked(process) => process.name().to_string(),
-        ProcessStates::Working(process) => process.name().to_string(),
-    }
-}
-
-#[tauri::command]
-pub fn process_resource_intensity<'a>(
-    process: &ProcessStates<'a>,
-) -> GenericProcessResourceIntensity {
-    match process {
-        ProcessStates::Ready(process) => process.resource_intensity.clone(),
-        ProcessStates::Blocked(process) => process.resource_intensity.clone(),
-        ProcessStates::Working(process) => process.resource_intensity.clone(),
-    }
-}
-
-#[tauri::command]
-pub fn process_set_name<'a>(process: &mut ProcessStates<'a>, name: String) {
-    match process {
-        ProcessStates::Ready(process) => process.set_name(name),
-        ProcessStates::Blocked(process) => process.set_name(name),
-        ProcessStates::Working(process) => process.set_name(name),
-    }
-}
-
-#[tauri::command]
-pub fn process_set_resource_intensity<'a>(
-    process: &mut ProcessStates<'a>,
-    resource_intensity: GenericProcessResourceIntensity,
-) {
-    match process {
-        ProcessStates::Ready(process) => process.set_resource_intensity(resource_intensity),
-        ProcessStates::Blocked(process) => process.set_resource_intensity(resource_intensity),
-        ProcessStates::Working(process) => process.set_resource_intensity(resource_intensity),
-    }
 }

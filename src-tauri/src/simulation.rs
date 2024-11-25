@@ -8,16 +8,16 @@ use std::{
     time::{Duration, Instant},
 };
 use tauri::http::status;
+use tauri::State;
 
-#[derive(Clone)]
 pub struct Simulation<'a> {
     simulation_speed: Arc<Mutex<u64>>,
     processes: Arc<Mutex<Vec<ProcessStates<'a>>>>,
     resources: Arc<Mutex<Vec<GenericResource>>>,
+    tx: std::sync::mpsc::Sender<()>,
     rx: std::sync::mpsc::Receiver<()>,
 }
 
-#[derive(Clone)]
 pub struct RunningSimulation<'a> {
     _marker: PhantomData<&'a ()>,
     simulation_speed: Arc<Mutex<u64>>,
@@ -26,7 +26,6 @@ pub struct RunningSimulation<'a> {
     tx: std::sync::mpsc::Sender<()>,
 }
 
-#[derive(Clone)]
 pub struct StoppedSimulation<'a> {
     _marker: PhantomData<&'a ()>,
     simulation_speed: Arc<Mutex<u64>>,
@@ -44,6 +43,12 @@ impl<'a> Simulation<'a> {
         }
     }
 }
+
+impl std::default::Default for Simulation<'a> {
+    
+}
+
+// impl `std::default::Default` trait for Process
 
 pub trait AllSimulationTrait<'a> {
     fn add_process(&mut self, process: ProcessStates<'a>);
@@ -110,52 +115,98 @@ macro_rules! impl_AllSimulationTrait {
 
 impl_AllSimulationTrait!(for Simulation<'a>, RunningSimulation<'a>, StoppedSimulation<'a>);
 
-#[tauri::command]
-pub fn simulation_add_process<'a>(simulation: &mut Simulation<'a>, process: ProcessStates<'a>) {
-    simulation.add_process(process);
-}
+// #[tauri::command]
+// pub fn process_remove_resource<'a>(state: State<'_, Mutex<sim>>) -> Option<()> {
+// todo!()
+// }
 
-#[tauri::command]
-pub fn simulation_processes<'a>(simulation: &Simulation<'a>) -> Arc<Mutex<Vec<ProcessStates<'a>>>> {
-    simulation.processes()
-}
+// #[tauri::command]
+// pub fn process_name<'a>(process: &ProcessStates<'a>) -> String {
+//     match process {
+//         ProcessStates::Ready(process) => process.name().to_string(),
+//         ProcessStates::Blocked(process) => process.name().to_string(),
+//         ProcessStates::Working(process) => process.name().to_string(),
+//     }
+// }
 
-#[tauri::command]
-pub fn simulation_add_resource<'a>(simulation: &mut Simulation<'a>, resource: GenericResource) {
-    simulation.add_resource(resource);
-}
+// #[tauri::command]
+// pub fn process_resource_intensity<'a>(
+//     process: &ProcessStates<'a>,
+// ) -> GenericProcessResourceIntensity {
+//     match process {
+//         ProcessStates::Ready(process) => process.resource_intensity.clone(),
+//         ProcessStates::Blocked(process) => process.resource_intensity.clone(),
+//         ProcessStates::Working(process) => process.resource_intensity.clone(),
+//     }
+// }
 
-#[tauri::command]
-pub fn simulation_resources<'a>(simulation: &Simulation<'a>) -> Arc<Mutex<Vec<GenericResource>>> {
-    simulation.resources()
-}
+// #[tauri::command]
+// pub fn process_set_name<'a>(process: &mut ProcessStates<'a>, name: String) {
+//     match process {
+//         ProcessStates::Ready(process) => process.set_name(name),
+//         ProcessStates::Blocked(process) => process.set_name(name),
+//         ProcessStates::Working(process) => process.set_name(name),
+//     }
+// }
 
-#[tauri::command]
-pub fn set_simulation_speed<'a>(simulation: &mut Simulation<'a>, speed: u64) {
-    simulation.set_simulation_speed(speed);
-}
+// #[tauri::command]
+// pub fn process_set_resource_intensity<'a>(
+//     process: &mut ProcessStates<'a>,
+//     resource_intensity: GenericProcessResourceIntensity,
+// ) {
+//     match process {
+//         ProcessStates::Ready(process) => process.set_resource_intensity(resource_intensity),
+//         ProcessStates::Blocked(process) => process.set_resource_intensity(resource_intensity),
+//         ProcessStates::Working(process) => process.set_resource_intensity(resource_intensity),
+//     }
+// }
 
-#[tauri::command]
-pub fn simulation_speed<'a>(simulation: &Simulation<'a>) -> Arc<Mutex<u64>> {
-    simulation.simulation_speed()
-}
+// #[tauri::command]
+// pub fn simulation_add_process<'a>(simulation: &mut Simulation<'a>, process: ProcessStates<'a>) {
+//     simulation.add_process(process);
+// }
 
-impl<'a> RunningSimulation<'a> {
-    pub fn stop(self) -> StoppedSimulation<'a> {
-        self.tx.send(()).unwrap();
-        StoppedSimulation {
-            _marker: PhantomData,
-            simulation_speed: self.simulation_speed,
-            processes: Arc::clone(&self.processes),
-            resources: Arc::clone(&self.resources),
-        }
-    }
-}
+// #[tauri::command]
+// pub fn simulation_processes<'a>(simulation: &Simulation<'a>) -> Arc<Mutex<Vec<ProcessStates<'a>>>> {
+//     simulation.processes()
+// }
 
-#[tauri::command]
-pub fn stop_simulation<'a>(running_simulation: RunningSimulation<'a>) -> StoppedSimulation<'a> {
-    running_simulation.stop()
-}
+// #[tauri::command]
+// pub fn simulation_add_resource<'a>(simulation: &mut Simulation<'a>, resource: GenericResource) {
+//     simulation.add_resource(resource);
+// }
+
+// #[tauri::command]
+// pub fn simulation_resources<'a>(simulation: &Simulation<'a>) -> Arc<Mutex<Vec<GenericResource>>> {
+//     simulation.resources()
+// }
+
+// #[tauri::command]
+// pub fn set_simulation_speed<'a>(simulation: &mut Simulation<'a>, speed: u64) {
+//     simulation.set_simulation_speed(speed);
+// }
+
+// #[tauri::command]
+// pub fn simulation_speed<'a>(simulation: &Simulation<'a>) -> Arc<Mutex<u64>> {
+//     simulation.simulation_speed()
+// }
+
+// impl<'a> RunningSimulation<'a> {
+//     pub fn stop(self) -> StoppedSimulation<'a> {
+//         self.tx.send(()).unwrap();
+//         StoppedSimulation {
+//             _marker: PhantomData,
+//             simulation_speed: self.simulation_speed,
+//             processes: Arc::clone(&self.processes),
+//             resources: Arc::clone(&self.resources),
+//         }
+//     }
+// }
+
+// #[tauri::command]
+// pub fn stop_simulation<'a>(running_simulation: RunningSimulation<'a>) -> StoppedSimulation<'a> {
+//     running_simulation.stop()
+// }
 
 impl<'a> StoppedSimulation<'a> {
     pub fn start(self) -> RunningSimulation<'a> {
@@ -183,12 +234,12 @@ impl<'a> StoppedSimulation<'a> {
             simulation_speed: Arc::clone(&self.simulation_speed),
             processes: Arc::clone(&self.processes),
             resources: Arc::clone(&self.resources),
-            tx: tx,
+            tx,
         }
     }
 }
 
-#[tauri::command]
-pub fn start_simulation<'a>(stopped_simulation: StoppedSimulation<'a>) -> RunningSimulation<'a> {
-    stopped_simulation.start()
-}
+// #[tauri::command]
+// pub fn start_simulation<'a>(stopped_simulation: StoppedSimulation<'a>) -> RunningSimulation<'a> {
+//     stopped_simulation.start()
+// }

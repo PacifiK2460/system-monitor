@@ -1,9 +1,12 @@
+use nanoid::nanoid;
+
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct GenericResource {
     name: String,
     blocking: bool,
     total_amount: u64,
     free_amount: u64,
+    id: String,
 }
 
 pub enum GenericResourceError {
@@ -17,6 +20,7 @@ impl GenericResource {
             total_amount,
             free_amount: total_amount,
             blocking,
+            id: nanoid!(7)
         }
     }
 
