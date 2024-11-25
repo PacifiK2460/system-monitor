@@ -1,3 +1,4 @@
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct GenericResource {
     name: String,
     blocking: bool,
@@ -15,7 +16,7 @@ impl GenericResource {
             name,
             total_amount,
             free_amount: total_amount,
-            blocking
+            blocking,
         }
     }
 
@@ -57,4 +58,34 @@ impl PartialEq for GenericResource {
     fn eq(&self, other: &Self) -> bool {
         std::ptr::eq(self, other)
     }
+}
+
+#[tauri::command]
+pub fn create_resource(name: String, total_amount: u64, blocking: bool) -> GenericResource {
+    GenericResource::new(name, total_amount, blocking)
+}
+
+#[tauri::command]
+pub fn get_resource_name(resource: GenericResource) -> String {
+    resource.name().to_string()
+}
+
+#[tauri::command]
+pub fn set_resource_name(mut resource: GenericResource, name: String) {
+    resource.set_name(name);
+}
+
+#[tauri::command]
+pub fn get_resource_total_amount(resource: GenericResource) -> u64 {
+    resource.total_amount()
+}
+
+#[tauri::command]
+pub fn set_resource_total_amount(mut resource: GenericResource, total_amount: u64) {
+    resource.set_total_amount(total_amount);
+}
+
+#[tauri::command]
+pub fn get_resource_free_amount(resource: GenericResource) -> u64 {
+    resource.free_amount()
 }

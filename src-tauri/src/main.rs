@@ -10,13 +10,46 @@
 
 mod generic_process;
 mod generic_resource;
+mod simulation;
 
+use crate::generic_process::*;
+use crate::generic_resource::*;
+use crate::simulation::*;
+
+use std::thread;
 use tauri::Manager;
 use window_vibrancy::*;
 
 fn main() {
+    // move to a new thread
+    thread::spawn(move || {
+        let sim = Simulation::new();
+    });
+
     tauri::Builder::default()
-        .setup(|app| {
+        .invoke_handler(tauri::generate_handler![
+            create_resource,
+            get_resource_name,
+            set_resource_name,
+            get_resource_total_amount,
+            set_resource_total_amount,
+            get_resource_free_amount,
+            create_process,
+            process_remove_resource,
+            process_name,
+            process_resource_intensity,
+            process_set_name,
+            process_set_resource_intensity,
+            simulation_add_process,
+            simulation_add_resource,
+            simulation_processes,
+            simulation_resources,
+            set_simulation_speed,
+            simulation_speed,
+            stop_simulation,
+            start_simulation,
+        ])
+        .setup(move |app| {
             let window = app.get_window("main").unwrap();
 
             #[cfg(target_os = "macos")]
