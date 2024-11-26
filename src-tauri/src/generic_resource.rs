@@ -1,3 +1,5 @@
+#![allow(unused_imports, unused_variables, dead_code)]
+
 use nanoid::nanoid;
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -20,12 +22,12 @@ impl GenericResource {
             total_amount,
             free_amount: total_amount,
             blocking,
-            id: nanoid!(7)
+            id: nanoid!(7),
         }
     }
 
-    pub fn name(&self) -> &str {
-        &self.name
+    pub fn name(&self) -> String {
+        self.name.clone()
     }
 
     pub fn set_name(&mut self, name: String) {
@@ -55,6 +57,10 @@ impl GenericResource {
         // self.free_amount -= amount;
         self.set_free_amount(self.free_amount - amount);
         Ok(())
+    }
+
+    pub fn id(&self) -> String {
+        self.id.clone()
     }
 }
 

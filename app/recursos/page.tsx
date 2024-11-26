@@ -1,7 +1,7 @@
 import React from 'react';
 
-import { Treemap, Data, DataChildren } from '@/components/ui/treemap';
-import { Table, TableBody, TableCaption, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Treemap, Data } from '@/components/ui/treemap';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 const data: Data = {
   name: 'legend',

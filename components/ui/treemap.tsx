@@ -1,7 +1,7 @@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@radix-ui/react-tooltip";
 import { Button } from "./button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "./card";
-import { Activity, Laptop, List } from "lucide-react";
+import { CardDescription } from "./card";
+import { Activity } from "lucide-react";
 
 export interface DataChildren {
     name: string;

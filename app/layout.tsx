@@ -3,7 +3,9 @@ import localFont from "next/font/local";
 import { ThemeProvider } from "@/components/theme-provider"
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
+
 import "./globals.css";
+import { Toaster } from "@/components/ui/toaster";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -39,6 +41,7 @@ export default function RootLayout({
         >
           <SidebarProvider>
             <AppSidebar/>
+            <Toaster />
             <main className="w-screen h-screen backdrop-blur-3xl dark:bg-black/60 bg-white/30">
               <SidebarTrigger className="text-white"/>
               {children}

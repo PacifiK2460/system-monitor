@@ -1,5 +1,7 @@
+#![allow(unused_imports, unused_variables, dead_code)]
+
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
-// #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 // Copyright 2019-2022 Tauri Programme within The Commons Conservancy
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-License-Identifier: MIT
@@ -12,21 +14,19 @@ mod generic_process;
 mod generic_resource;
 mod simulation;
 
-use std::sync::Mutex;
-
 use crate::generic_process::*;
 use crate::generic_resource::*;
 use crate::simulation::*;
-
 use window_vibrancy::*;
 
-use tauri::Manager;
+use tauri::{Builder, Manager};
 
 pub struct TauriSim<'a>(Simulation<'a>);
 
-fn main() {
+pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
+            simulation::initialize_simulation,
             generic_resource::create_resource,
             generic_resource::get_resource_name,
             generic_resource::set_resource_name,
@@ -49,7 +49,7 @@ fn main() {
             simulation::start_simulation,
         ])
         .setup(move |app| {
-            app.manage(Mutex::new(TauriSim(Simulation::Stopped(Simulation::new()))));
+            app.manage(TauriSim(Simulation::Stopped(Simulation::new())));
 
             let window = app.get_window("main").unwrap();
 
