@@ -22,7 +22,7 @@ use window_vibrancy::*;
 
 use tauri::Manager;
 
-pub struct TauriSim<'a>(Simulation<'a>);
+pub struct TauriSim(RunningSimulation);
 
 fn main() {
     tauri::Builder::default()
@@ -34,6 +34,7 @@ fn main() {
             generic_resource::set_resource_total_amount,
             generic_resource::get_resource_free_amount,
             generic_process::create_process,
+            generic_process::process_add_resource,
             generic_process::process_remove_resource,
             generic_process::process_get_resource_intensity,
             generic_process::process_set_name,
@@ -49,7 +50,7 @@ fn main() {
             simulation::start_simulation,
         ])
         .setup(move |app| {
-            app.manage(Mutex::new(TauriSim(Simulation::Stopped(Simulation::new()))));
+            app.manage(Mutex::new(TauriSim(RunningSimulation::new())));
 
             let window = app.get_window("main").unwrap();
 
@@ -65,6 +66,8 @@ fn main() {
             window
                 .set_decorations(true)
                 .expect("Failed to set window decorations");
+
+            simulation::start_simulation(app.app_handle());
 
             Ok(())
         })

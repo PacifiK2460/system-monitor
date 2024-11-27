@@ -18,17 +18,17 @@ pub enum GenericProcessResourceIntensity {
 }
 
 #[derive(Clone, PartialEq, serde::Serialize)]
-pub struct ResourceSlot<'a> {
-    resource: &'a GenericResource,
+pub struct ResourceSlot {
+    resource_id: String,
     id: String,
     current_amount: u64,
     base_amount: u64,
 }
 
-impl<'a> ResourceSlot<'a> {
-    fn new(resource: &'a GenericResource, base_amount: u64) -> Self {
+impl ResourceSlot {
+    fn new(resource: &GenericResource, base_amount: u64) -> Self {
         Self {
-            resource,
+            resource_id: resource.id(),
             current_amount: base_amount,
             base_amount,
             id: nanoid!(7),
@@ -37,39 +37,36 @@ impl<'a> ResourceSlot<'a> {
 }
 
 #[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct Process<'a> {
-    _marker: PhantomData<&'a ()>,
+pub struct Process {
+    _marker: PhantomData<()>,
 }
 
 #[derive(Clone, PartialEq, serde::Serialize)]
-pub struct ReadyProcess<'a> {
+pub struct ReadyProcess {
     name: String,
     id: String,
     resource_intensity: GenericProcessResourceIntensity,
-    resource_slot: Vec<ResourceSlot<'a>>,
+    resource_slot: Vec<ResourceSlot>,
 }
 
 #[derive(Clone, PartialEq, serde::Serialize)]
-pub struct BlockedProcess<'a> {
+pub struct BlockedProcess {
     name: String,
     id: String,
     resource_intensity: GenericProcessResourceIntensity,
-    resource_slot: Vec<ResourceSlot<'a>>,
+    resource_slot: Vec<ResourceSlot>,
 }
 
 #[derive(Clone, PartialEq, serde::Serialize)]
-pub struct WorkingProcess<'a> {
+pub struct WorkingProcess {
     name: String,
     id: String,
     resource_intensity: GenericProcessResourceIntensity,
-    resource_slot: Vec<ResourceSlot<'a>>,
+    resource_slot: Vec<ResourceSlot>,
 }
 
-impl<'a> Process<'a> {
-    pub fn new(
-        name: String,
-        resource_intensity: GenericProcessResourceIntensity,
-    ) -> ReadyProcess<'a> {
+impl Process {
+    pub fn new(name: String, resource_intensity: GenericProcessResourceIntensity) -> ReadyProcess {
         let resource_list = vec![];
 
         ReadyProcess {
@@ -81,9 +78,9 @@ impl<'a> Process<'a> {
     }
 }
 
-pub trait AllProcessTraits<'a> {
-    fn remove_resource(&mut self, resource: &'a GenericResource) -> Option<()>;
-    fn resource_slot_mut(&mut self) -> &mut Vec<ResourceSlot<'a>>;
+pub trait AllProcessTraits {
+    fn remove_resource(&mut self, resource: String) -> Option<()>;
+    fn resource_slot_mut(&mut self) -> &mut Vec<ResourceSlot>;
     fn name(&self) -> String;
     fn resource_intensity(&self) -> &GenericProcessResourceIntensity;
     fn set_name(&mut self, name: String);
@@ -92,14 +89,63 @@ pub trait AllProcessTraits<'a> {
     fn id(&self) -> String;
 }
 
+// impl AllProcessTraits for ReadyProcess {
+//     fn remove_resource(&mut self, resource_id: String) -> Option<()> {
+//         let index = self
+//             .resource_slot_mut()
+//             .iter_mut()
+//             .position(|resource_slot| resource_slot.resource_id == resource_id);
+
+//         match index {
+//             Some(index) => {
+//                 self.resource_slot_mut().remove(index);
+//                 Some(())
+//             }
+//             None => None,
+//         }
+//     }
+
+//     fn id(&self) -> String {
+//         self.id.clone()
+//     }
+
+//     fn resource_slot_mut(&mut self) -> &mut Vec<ResourceSlot> {
+//         &mut self.resource_slot
+//     }
+
+//     fn name(&self) -> String {
+//         self.name.clone()
+//     }
+
+//     fn resource_intensity(&self) -> &GenericProcessResourceIntensity {
+//         &self.resource_intensity
+//     }
+
+//     fn set_name(&mut self, name: String) {
+//         self.name = name;
+//     }
+
+//     fn set_resource_intensity(&mut self, resource_intensity: GenericProcessResourceIntensity) {
+//         self.resource_intensity = resource_intensity;
+//     }
+
+//     fn should_perform_action(&self) -> bool {
+//         let mut rng = rand::thread_rng();
+//         let roll: u64 = rng.gen::<u64>() * 10;
+//         let intensity = self.resource_intensity as u64;
+
+//         roll < intensity
+//     }
+// }
+
 macro_rules! impl_AllProcessTraits {
     (for $($t:ty),+) => {
-        $(impl<'a> AllProcessTraits<'a> for $t {
-            fn remove_resource(&mut self, resource: &GenericResource) -> Option<()> {
+        $(impl AllProcessTraits for $t {
+            fn remove_resource(&mut self, resource_id: String) -> Option<()> {
                 let index = self
                     .resource_slot_mut()
                     .iter_mut()
-                    .position(|resource_slot| resource_slot.resource == resource);
+                    .position(|resource_slot| resource_slot.resource_id == resource_id);
 
                 match index {
                     Some(index) => {
@@ -114,7 +160,7 @@ macro_rules! impl_AllProcessTraits {
                 self.id.clone()
             }
 
-            fn resource_slot_mut(&mut self) -> &mut Vec<ResourceSlot<'a>> {
+            fn resource_slot_mut(&mut self) -> &mut Vec<ResourceSlot> {
                 &mut self.resource_slot
             }
 
@@ -146,9 +192,9 @@ macro_rules! impl_AllProcessTraits {
     }
 }
 
-impl_AllProcessTraits!(for ReadyProcess<'a>, BlockedProcess<'a>, WorkingProcess<'a>);
+impl_AllProcessTraits!(for ReadyProcess, BlockedProcess, WorkingProcess);
 
-impl<'a> ReadyProcess<'a> {
+impl ReadyProcess {
     fn prepare(&mut self) -> &Self {
         if self.resource_intensity == GenericProcessResourceIntensity::None {
             return self;
@@ -169,7 +215,7 @@ impl<'a> ReadyProcess<'a> {
         return self;
     }
 
-    fn run(self) -> WorkingProcess<'a> {
+    fn run(self) -> WorkingProcess {
         WorkingProcess {
             name: self.name,
             resource_intensity: self.resource_intensity,
@@ -178,7 +224,7 @@ impl<'a> ReadyProcess<'a> {
         }
     }
 
-    fn block(self) -> BlockedProcess<'a> {
+    fn block(self) -> BlockedProcess {
         BlockedProcess {
             name: self.name,
             resource_intensity: self.resource_intensity,
@@ -188,8 +234,8 @@ impl<'a> ReadyProcess<'a> {
     }
 }
 
-impl<'a> BlockedProcess<'a> {
-    fn unblock(self) -> ReadyProcess<'a> {
+impl BlockedProcess {
+    fn unblock(self) -> ReadyProcess {
         ReadyProcess {
             name: self.name,
             resource_intensity: self.resource_intensity,
@@ -199,8 +245,8 @@ impl<'a> BlockedProcess<'a> {
     }
 }
 
-impl<'a> WorkingProcess<'a> {
-    fn finish(self) -> ReadyProcess<'a> {
+impl WorkingProcess {
+    fn finish(self) -> ReadyProcess {
         ReadyProcess {
             name: self.name,
             resource_intensity: self.resource_intensity,
@@ -211,33 +257,81 @@ impl<'a> WorkingProcess<'a> {
 }
 
 #[derive(Clone, PartialEq, serde::Serialize)]
-pub enum ProcessStates<'a> {
-    Ready(ReadyProcess<'a>),
-    Blocked(BlockedProcess<'a>),
-    Working(WorkingProcess<'a>),
+pub enum ProcessStates {
+    Ready(ReadyProcess),
+    Blocked(BlockedProcess),
+    Working(WorkingProcess),
 }
 
 #[tauri::command]
-pub fn create_process<'a>(
+pub fn create_process(
     name: String,
     resource_intensity: GenericProcessResourceIntensity,
-) -> ReadyProcess<'a> {
+) -> ReadyProcess {
     Process::new(name, resource_intensity)
 }
 
 #[tauri::command]
-pub fn process_remove_resource(
+pub fn process_add_resource(
     app_handle: tauri::AppHandle,
+    process_id: String,
     resource_id: String,
+    amount: u64,
 ) -> Option<()> {
+    let state = app_handle.state::<Mutex<TauriSim>>();
+    let sim = state.lock().unwrap();
+    let running_binding = sim.0.processes();
+    let processes = running_binding.lock().unwrap();
+
+    let resource_binding = sim.0.resources();
+    let resources = resource_binding.lock().unwrap();
+
+    let process = match processes
+        .iter()
+        .find(|p| match p {
+            ProcessStates::Ready(process) => process.id == process_id,
+            ProcessStates::Blocked(process) => process.id == process_id,
+            ProcessStates::Working(process) => process.id == process_id,
+        })
+        .cloned()
+    {
+        Some(process_found) => process_found,
+        None => return None,
+    };
+
+    let resource = match resources.iter().find(|r| r.id() == resource_id).cloned() {
+        Some(resource_found) => resource_found,
+        None => return None,
+    };
+
+    match process {
+        ProcessStates::Ready(mut process) => {
+            process
+                .resource_slot_mut()
+                .push(ResourceSlot::new(&resource, amount));
+            Some(())
+        }
+        ProcessStates::Blocked(mut process) => {
+            process
+                .resource_slot_mut()
+                .push(ResourceSlot::new(&resource, amount));
+            Some(())
+        }
+        ProcessStates::Working(mut process) => {
+            process
+                .resource_slot_mut()
+                .push(ResourceSlot::new(&resource, amount));
+            Some(())
+        }
+    }
+}
+
+#[tauri::command]
+pub fn process_remove_resource(app_handle: tauri::AppHandle, resource_id: String) -> Option<()> {
     let state = app_handle.state::<Mutex<TauriSim>>();
     let mut sim = state.lock().unwrap();
     let running_binding = sim.0.resources();
-    let stopped_binding = sim.0.resources();
-    let resources = match &sim.0 {
-        Simulation::Running(_) => running_binding.lock().unwrap(),
-        Simulation::Stopped(_) => stopped_binding.lock().unwrap(),
-    };
+    let resources = running_binding.lock().unwrap();
 
     match resources.iter().find(|r| r.id() == resource_id).cloned() {
         Some(resource_found) => return Some(sim.0.remove_resource(&resource_found)),
@@ -254,11 +348,7 @@ pub fn process_get_resource_intensity(
     let sim = state.lock().unwrap();
     let running_binding = sim.0.processes();
     let stopped_binding = sim.0.processes();
-    let processes = match &sim.0 {
-        Simulation::Running(_) => running_binding.lock().unwrap(),
-        Simulation::Stopped(_) => stopped_binding.lock().unwrap(),
-    };
-
+    let processes = running_binding.lock().unwrap();
     match processes
         .iter()
         .find(|p| match p {
@@ -278,15 +368,12 @@ pub fn process_get_resource_intensity(
 }
 
 #[tauri::command]
-pub fn process_set_name<'a>(app_handle: tauri::AppHandle, process_id: String, name: String) {
+pub fn process_set_name(app_handle: tauri::AppHandle, process_id: String, name: String) {
     let state = app_handle.state::<Mutex<TauriSim>>();
     let sim = state.lock().unwrap();
     let running_binding = sim.0.processes();
     let stopped_binding = sim.0.processes();
-    let processes = match &sim.0 {
-        Simulation::Running(_) => running_binding.lock().unwrap(),
-        Simulation::Stopped(_) => stopped_binding.lock().unwrap(),
-    };
+    let processes = running_binding.lock().unwrap();
 
     match processes
         .iter()
@@ -309,15 +396,12 @@ pub fn process_set_name<'a>(app_handle: tauri::AppHandle, process_id: String, na
 }
 
 #[tauri::command]
-pub fn process_get_name<'a>(app_handle: tauri::AppHandle, process_id: String) -> Option<String> {
+pub fn process_get_name(app_handle: tauri::AppHandle, process_id: String) -> Option<String> {
     let state = app_handle.state::<Mutex<TauriSim>>();
     let sim = state.lock().unwrap();
     let running_binding = sim.0.processes();
     let stopped_binding = sim.0.processes();
-    let processes = match &sim.0 {
-        Simulation::Running(_) => running_binding.lock().unwrap(),
-        Simulation::Stopped(_) => stopped_binding.lock().unwrap(),
-    };
+    let processes = running_binding.lock().unwrap();
 
     match processes
         .iter()
@@ -338,7 +422,7 @@ pub fn process_get_name<'a>(app_handle: tauri::AppHandle, process_id: String) ->
 }
 
 #[tauri::command]
-pub fn process_set_resource_intensity<'a>(
+pub fn process_set_resource_intensity(
     app_handle: tauri::AppHandle,
     process_id: String,
     resource_intensity: GenericProcessResourceIntensity,
@@ -347,10 +431,7 @@ pub fn process_set_resource_intensity<'a>(
     let sim = state.lock().unwrap();
     let running_binding = sim.0.processes();
     let stopped_binding = sim.0.processes();
-    let processes = match &sim.0 {
-        Simulation::Running(_) => running_binding.lock().unwrap(),
-        Simulation::Stopped(_) => stopped_binding.lock().unwrap(),
-    };
+    let processes = running_binding.lock().unwrap();
 
     match processes
         .iter()

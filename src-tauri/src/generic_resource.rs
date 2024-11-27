@@ -2,7 +2,7 @@
 
 use nanoid::nanoid;
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, Debug)]
 pub struct GenericResource {
     name: String,
     blocking: bool,

@@ -26,7 +26,6 @@ import { Activity, ChevronDown, Laptop, List, Minus, Moon, MoreHorizontal, Palet
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@radix-ui/react-dropdown-menu"
 import { useTheme } from "next-themes"
 import { ToggleGroup, ToggleGroupItem } from "@radix-ui/react-toggle-group"
-import { StopIcon } from "@radix-ui/react-icons"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@radix-ui/react-tooltip"
 import { useEffect, useState } from "react"
 import { Badge } from "./ui/badge"
@@ -63,6 +62,8 @@ import { toast } from "@/hooks/use-toast"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
+import { Checkbox } from "./ui/checkbox"
+import { ScrollArea } from "./ui/scroll-area"
 
 const ResourceSchema = z.object({
     name: z.string().min(2, {
@@ -81,19 +82,39 @@ const ProcesoSchema = z.object({
         message: "La cantidad de memoria debe ser mayor a 0",
     }).max(4, {
         message: "La cantidad de memoria debe ser menor a 4",
-    })
+    }),
+    resources: z.array(z.object({
+        id: z.string(),
+        totalAmount: z.number().min(1, {
+            message: "La cantidad de recursos debe ser mayor a 0",
+        }),
+    })).refine((value) => value.some((item) => item), {
+        message: "Debe seleccionar al menos un recurso",
+    }),
 })
 
 // Define the process type
 type Process = {
-    id: number
-    name: string
-    intensity: number
+    Ready: {
+        id: string
+        name: string
+        intensity: number
+    },
+    Blocked: {
+        id: string
+        name: string
+        intensity: number
+    },
+    Working: {
+        id: string
+        name: string
+        intensity: number
+    }
 }
 
 // Define the resource type
 type Resource = {
-    id: number
+    id: string
     name: string
     totalAmount: number
     usedAmount: number
@@ -101,8 +122,9 @@ type Resource = {
 
 export function AppSidebar() {
     const { setTheme } = useTheme()
-    const [simulationSpeed, setSimulationSpeed] = useState(60);
-    const [lastSimulationSpeed, setLastSimulationSpeed] = useState(60);
+    // const [simState, setSimState] = useState < "stopped" || "running" > ("stopped")
+    const [simState, setSimState] = useState<"stopped" | "running">("running");
+    const [simulationSpeed, setSimulationSpeed] = useState(1)
     const [processes, setProcesses] = useState<Process[]>([]);
     const [resources, setResources] = useState<Resource[]>([]);
 
@@ -134,6 +156,16 @@ export function AppSidebar() {
         if (!nuevo_recurso) {
             return
         }
+
+        invoke("simulation_add_resource", {
+            resource: nuevo_recurso
+        }).catch((error) => {
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: `No se ha podido agregar el recurso ${nuevo_recurso.name} (${nuevo_recurso.id}) a la simulación. ${error}`,
+            })
+        })
 
         setResources([...resources, nuevo_recurso])
 
@@ -186,22 +218,51 @@ export function AppSidebar() {
             })
 
         if (!nuevo_proceso) {
-            return
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: `No se ha podido agregar el proceso ${data.name}.`,
+            })
+            return;
         }
+
+        await Promise.all(data.resources.map(async (resource) => {
+            await invoke("process_add_resource", {
+                processId: nuevo_proceso.Ready.id,
+                resourceId: resource.id,
+                amount: resource.totalAmount,
+            })
+                .then(() => {
+
+                })
+                .catch((error) => {
+                    toast({
+                        variant: "destructive",
+                        title: "Error",
+                        description: `No se ha podido asignar el recurso ${resource.id} al proceso ${nuevo_proceso.Ready.name} (${nuevo_proceso.Ready.id}). ${error}`,
+                    })
+                })
+        }));
+
+        invoke("simulation_add_process", {
+            name: nuevo_proceso.Ready.name,
+            resourceIntensity: intensity,
+        }).catch((error) => {
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: `No se ha podido agregar el proceso ${nuevo_proceso.Ready.name} (${nuevo_proceso.Ready.id}) a la simulación. ${error}`,
+            })
+        })
 
         setProcesses([...processes, nuevo_proceso])
         toast({
             title: "Proceso Agregado",
-            description: `Se ha agregado el proceso ${nuevo_proceso.name} (${nuevo_proceso.id})`,
+            description: `Se ha agregado el proceso ${nuevo_proceso.Ready.name} (${nuevo_proceso.Ready.id})`,
         })
     }
 
     useEffect(() => {
-        if (lastSimulationSpeed === simulationSpeed) {
-            return
-        }
-
-        setLastSimulationSpeed(simulationSpeed);
         invoke("simulation_set_simulation_speed", { speed: simulationSpeed })
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [simulationSpeed])
@@ -209,6 +270,8 @@ export function AppSidebar() {
     useEffect(() => {
         invoke("simulation_resources")
             .then((res) => {
+                console.log("Resources", res)
+
                 // Check if the resources are the same
                 if (JSON.stringify(resources) === JSON.stringify(res)) {
                     return
@@ -221,6 +284,7 @@ export function AppSidebar() {
 
         invoke("simulation_processes")
             .then((pros) => {
+                console.log("Processes R", pros)
                 // Check if the processes are the same
                 if (JSON.stringify(processes) === JSON.stringify(pros)) {
                     return
@@ -229,6 +293,14 @@ export function AppSidebar() {
             })
             .catch((error) => {
                 console.error("Error getting processes", error)
+            })
+
+        invoke("start_simulation")
+            .then(() => {
+                console.log("Simulation started")
+            })
+            .catch((error) => {
+                console.error("Error starting simulation", error)
             })
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
@@ -384,6 +456,77 @@ export function AppSidebar() {
                                                     </FormItem>
                                                 )}
                                             />
+
+                                            <FormField
+                                                control={processForm.control}
+                                                name="resources"
+                                                render={() => (
+                                                    <FormItem>
+                                                        <div className="mb-4">
+                                                            <FormLabel className="text-base">
+                                                                Recursos
+                                                            </FormLabel>
+                                                            <FormDescription>
+                                                                Seleccione los recursos que necesita el proceso
+                                                            </FormDescription>
+                                                        </div>
+
+                                                        <ScrollArea className="h-36 rounded-sm border px-1">
+                                                            {resources.map((item) => (
+                                                                <FormField
+                                                                    key={item.id}
+                                                                    control={processForm.control}
+                                                                    name="resources"
+                                                                    render={({ field }) => {
+                                                                        const currentValue = Array.isArray(field.value) ? field.value : [];
+                                                                        return (
+                                                                            <div key={item.id} className="flex flex-row items-center m-2">
+                                                                                <FormItem
+                                                                                    className="flex flex-row items-start space-x-3 space-y-0 grow"
+                                                                                >
+                                                                                    <FormControl>
+                                                                                        <Checkbox
+                                                                                            checked={currentValue.some(resource => resource.id === item.id)}
+                                                                                            onCheckedChange={(checked) => {
+                                                                                                return checked
+                                                                                                    ? field.onChange([...currentValue, { id: item.id, totalAmount: 0 }])
+                                                                                                    : field.onChange(currentValue.filter((value) => value.id !== item.id));
+                                                                                            }}
+                                                                                        />
+                                                                                    </FormControl>
+                                                                                    <FormLabel className="text-sm font-normal">
+                                                                                        {item.name} ({item.id})
+                                                                                    </FormLabel>
+                                                                                </FormItem>
+
+                                                                                <FormItem className="flex flex-row gap-1 items-center">
+                                                                                    <FormControl>
+                                                                                        <>
+                                                                                            <Input
+                                                                                                type="number"
+                                                                                                placeholder="Cantidad"
+                                                                                                disabled={!currentValue.some(resource => resource.id === item.id)}
+                                                                                                onChange={(e) => {
+                                                                                                    const value = e.target.value;
+                                                                                                    const index = currentValue.findIndex(resource => resource.id === item.id);
+                                                                                                    const newResources = [...currentValue];
+                                                                                                    newResources[index] = { id: item.id, totalAmount: parseInt(value) };
+                                                                                                    field.onChange(newResources);
+                                                                                                }}
+                                                                                            />
+                                                                                        </>
+                                                                                    </FormControl>
+                                                                                </FormItem>
+                                                                            </div>
+                                                                        );
+                                                                    }}
+                                                                />
+                                                            ))}
+                                                        </ScrollArea>
+
+                                                    </FormItem>
+                                                )}
+                                            />
                                             <DialogFooter>
                                                 <Button type="submit">Agregar Proceso</Button>
                                             </DialogFooter>
@@ -414,10 +557,10 @@ export function AppSidebar() {
 
                                         {
                                             processes.map((process) => (
-                                                <SidebarMenuItem key={process.id} className="flex">
+                                                <SidebarMenuItem key={process.Ready.id} className="flex">
                                                     <SidebarMenuSubButton>
-                                                        {process.name}
-                                                        <Badge>{process.id}</Badge>
+                                                        {process.Ready.name}
+                                                        <Badge>{process.Ready.id}</Badge>
                                                     </SidebarMenuSubButton>
                                                 </SidebarMenuItem>
                                             ))
@@ -441,10 +584,11 @@ export function AppSidebar() {
                             <SidebarMenuItem className="flex justify-center">
                                 <ToggleGroup type="single">
                                     {
-                                        simulationSpeed === 0 ?
+                                        simState === "stopped" ?
                                             <ToggleGroupItem value="continue" aria-label="Reanudar"
                                                 onClick={() => {
-                                                    setSimulationSpeed(60)
+                                                    invoke("start_simulation")
+                                                    setSimState("running")
                                                 }}
                                             >
                                                 <TooltipProvider>
@@ -461,7 +605,8 @@ export function AppSidebar() {
                                             :
                                             <ToggleGroupItem value="pause" aria-label="Pausar"
                                                 onClick={() => {
-                                                    setSimulationSpeed(0)
+                                                    invoke("stop_simulation")
+                                                    setSimState("stopped")
                                                 }}
                                             >
                                                 <TooltipProvider>

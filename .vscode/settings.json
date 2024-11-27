@@ -9,5 +9,6 @@
         "serde",
         "treemap",
         "Treemap"
-    ]
+    ],
+    "cSpell.enabled": false
 }

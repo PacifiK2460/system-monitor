@@ -1,7 +1,8 @@
 #![allow(unused_imports, unused_variables, dead_code, unreachable_code)]
 use crate::generic_process::{Process, ProcessStates};
 use crate::{generic_process::GenericProcessResourceIntensity, generic_resource::GenericResource};
-use crate::{AllProcessTraits, TauriSim};
+use crate::{AllProcessTraits, ReadyProcess, TauriSim};
+use std::os::windows::process;
 use std::sync::mpsc::channel;
 use std::{
     sync::{Arc, Mutex},
@@ -11,39 +12,52 @@ use std::{
 use tauri::State;
 use tauri::{Builder, GlobalWindowEvent, Manager};
 
-pub struct _Simulation<'a> {
+pub struct _Simulation {
     simulation_speed: Arc<Mutex<u64>>,
     last_simulation_speed: Arc<Mutex<u64>>,
-    processes: Arc<Mutex<Vec<ProcessStates<'a>>>>,
+    processes: Arc<Mutex<Vec<ProcessStates>>>,
     resources: Arc<Mutex<Vec<GenericResource>>>,
     tx: std::sync::mpsc::Sender<()>,
     rx: std::sync::mpsc::Receiver<()>,
 }
 
 #[derive(Clone)]
-pub struct RunningSimulation<'a> {
+pub struct RunningSimulation {
     simulation_speed: Arc<Mutex<u64>>,
     last_simulation_speed: Arc<Mutex<u64>>,
-    processes: Arc<Mutex<Vec<ProcessStates<'a>>>>,
+    processes: Arc<Mutex<Vec<ProcessStates>>>,
     resources: Arc<Mutex<Vec<GenericResource>>>,
     tx: std::sync::mpsc::Sender<()>,
 }
 
+impl RunningSimulation {
+    pub fn new() -> Self {
+        let (tx, rx) = channel();
+        RunningSimulation {
+            simulation_speed: Arc::new(Mutex::new(60)),
+            last_simulation_speed: Arc::new(Mutex::new(0)),
+            processes: Arc::new(Mutex::new(vec![])),
+            resources: Arc::new(Mutex::new(vec![])),
+            tx,
+        }
+    }
+}
+
 #[derive(Clone)]
-pub struct StoppedSimulation<'a> {
+pub struct StoppedSimulation {
     simulation_speed: Arc<Mutex<u64>>,
     last_simulation_speed: Arc<Mutex<u64>>,
-    processes: Arc<Mutex<Vec<ProcessStates<'a>>>>,
+    processes: Arc<Mutex<Vec<ProcessStates>>>,
     resources: Arc<Mutex<Vec<GenericResource>>>,
 }
 
-pub enum Simulation<'a> {
-    Running(RunningSimulation<'a>),
-    Stopped(StoppedSimulation<'a>),
+pub enum Simulation {
+    Running(RunningSimulation),
+    Stopped(StoppedSimulation),
 }
 
-impl<'a> Simulation<'a> {
-    pub fn new() -> StoppedSimulation<'a> {
+impl Simulation {
+    pub fn new() -> StoppedSimulation {
         StoppedSimulation {
             simulation_speed: Arc::new(Mutex::new(60)),
             last_simulation_speed: Arc::new(Mutex::new(0)),
@@ -53,10 +67,10 @@ impl<'a> Simulation<'a> {
     }
 }
 
-pub trait AllSimulationTrait<'a> {
-    fn add_process(&mut self, process: ProcessStates<'a>);
-    fn remove_process(&mut self, process: &ProcessStates<'a>);
-    fn processes(&self) -> Arc<Mutex<Vec<ProcessStates<'a>>>>;
+pub trait AllSimulationTrait {
+    fn add_process(&mut self, process: ProcessStates);
+    fn remove_process(&mut self, process: &ProcessStates);
+    fn processes(&self) -> Arc<Mutex<Vec<ProcessStates>>>;
 
     fn add_resource(&mut self, resource: GenericResource);
     fn remove_resource(&mut self, resource: &GenericResource);
@@ -66,22 +80,22 @@ pub trait AllSimulationTrait<'a> {
     fn simulation_speed(&self) -> Arc<Mutex<u64>>;
 }
 
-impl<'a> AllSimulationTrait<'a> for Simulation<'a> {
-    fn add_process(&mut self, process: ProcessStates<'a>) {
+impl AllSimulationTrait for Simulation {
+    fn add_process(&mut self, process: ProcessStates) {
         match self {
             Simulation::Running(sim) => sim.add_process(process),
             Simulation::Stopped(sim) => sim.add_process(process),
         }
     }
 
-    fn remove_process(&mut self, process: &ProcessStates<'a>) {
+    fn remove_process(&mut self, process: &ProcessStates) {
         match self {
             Simulation::Running(sim) => sim.remove_process(process),
             Simulation::Stopped(sim) => sim.remove_process(process),
         }
     }
 
-    fn processes(&self) -> Arc<Mutex<Vec<ProcessStates<'a>>>> {
+    fn processes(&self) -> Arc<Mutex<Vec<ProcessStates>>> {
         match self {
             Simulation::Running(sim) => sim.processes(),
             Simulation::Stopped(sim) => sim.processes(),
@@ -124,11 +138,11 @@ impl<'a> AllSimulationTrait<'a> for Simulation<'a> {
     }
 }
 
-// impl<'a> AllSimulationTrait<'a> for _Simulation<'a> {
-//     fn add_process(&mut self, process: ProcessStates<'a>) {
+// impl  AllSimulationTrait  for _Simulation  {
+//     fn add_process(&mut self, process: ProcessStates ) {
 //         self.processes().lock().unwrap().push(process);
 //     }
-//     fn processes(&self) -> Arc<Mutex<Vec<ProcessStates<'a>>>> {
+//     fn processes(&self) -> Arc<Mutex<Vec<ProcessStates >>> {
 //         Arc::clone(&self.processes)
 //     }
 //     fn add_resource(&mut self, resource: GenericResource) {
@@ -145,7 +159,7 @@ impl<'a> AllSimulationTrait<'a> for Simulation<'a> {
 //     fn simulation_speed(&self) -> Arc<Mutex<u64>> {
 //         Arc::clone(&self.simulation_speed)
 //     }
-//     fn remove_process(&mut self, process: &ProcessStates<'a>) {
+//     fn remove_process(&mut self, process: &ProcessStates ) {
 //         let index = self
 //             .processes()
 //             .lock()
@@ -171,11 +185,11 @@ impl<'a> AllSimulationTrait<'a> for Simulation<'a> {
 
 macro_rules! impl_AllSimulationTrait {
     (for $($t:ty),+) => {
-        $(impl<'a> AllSimulationTrait<'a> for $t {
-            fn add_process(&mut self, process: ProcessStates<'a>) {
+        $(impl  AllSimulationTrait  for $t {
+            fn add_process(&mut self, process: ProcessStates) {
                 self.processes().lock().unwrap().push(process);
             }
-            fn processes(&self) -> Arc<Mutex<Vec<ProcessStates<'a>>>> {
+            fn processes(&self) -> Arc<Mutex<Vec<ProcessStates>>> {
                 Arc::clone(&self.processes)
             }
             fn add_resource(&mut self, resource: GenericResource) {
@@ -193,7 +207,7 @@ macro_rules! impl_AllSimulationTrait {
                 Arc::clone(&self.simulation_speed)
             }
 
-            fn remove_process(&mut self, process: &ProcessStates<'a>) {
+            fn remove_process(&mut self, process: &ProcessStates) {
                 let index = self
                     .processes()
                     .lock()
@@ -223,10 +237,10 @@ macro_rules! impl_AllSimulationTrait {
     }
 }
 
-impl_AllSimulationTrait!(for _Simulation<'a>, RunningSimulation<'a>, StoppedSimulation<'a>);
+impl_AllSimulationTrait!(for _Simulation , RunningSimulation , StoppedSimulation );
 
 #[tauri::command]
-pub fn simulation_add_process<'a>(
+pub fn simulation_add_process(
     app_handle: tauri::AppHandle,
     name: String,
     resource_intensity: GenericProcessResourceIntensity,
@@ -240,39 +254,32 @@ pub fn simulation_add_process<'a>(
 }
 
 #[tauri::command]
-pub fn simulation_processes<'a>(app_handle: tauri::AppHandle) -> Vec<String> {
+pub fn simulation_processes(app_handle: tauri::AppHandle) -> Vec<ProcessStates> {
     let state = app_handle.state::<Mutex<TauriSim>>();
     let sim = state.lock().unwrap();
     let sim = &sim.0;
 
     let binding = sim.processes();
     let processes = binding.lock().unwrap();
-    processes
-        .iter()
-        .map(|p| match p {
-            ProcessStates::Ready(ready_process) => ready_process.name(),
-            ProcessStates::Blocked(blocked_process) => blocked_process.name(),
-            ProcessStates::Working(working_process) => working_process.name(),
-        })
-        .collect()
+    processes.clone()
 }
 
 #[tauri::command]
-pub fn simulation_add_resource<'a>(app_handle: tauri::AppHandle, resource: GenericResource) {
+pub fn simulation_add_resource(app_handle: tauri::AppHandle, resource: GenericResource) {
     let state = app_handle.state::<Mutex<TauriSim>>();
     let mut sim = state.lock().unwrap();
     sim.0.add_resource(resource);
 }
 
 #[tauri::command]
-pub fn simulation_resources<'a>(app_handle: tauri::AppHandle) -> Vec<String> {
+pub fn simulation_resources(app_handle: tauri::AppHandle) -> Vec<GenericResource> {
     let state = app_handle.state::<Mutex<TauriSim>>();
     let sim = state.lock().unwrap();
     let sim = &sim.0;
 
     let binding = sim.resources();
     let resources = binding.lock().unwrap();
-    resources.iter().map(|r| r.name()).collect()
+    resources.clone()
 }
 
 #[tauri::command]
@@ -283,7 +290,7 @@ pub fn simulation_set_simulation_speed(app_handle: tauri::AppHandle, speed: u64)
 }
 
 #[tauri::command]
-pub fn simulation_speed<'a>(app_handle: tauri::AppHandle) -> u64 {
+pub fn simulation_speed(app_handle: tauri::AppHandle) -> u64 {
     let state = app_handle.state::<Mutex<TauriSim>>();
     let sim = state.lock().unwrap();
     let sim = &sim.0;
@@ -293,74 +300,81 @@ pub fn simulation_speed<'a>(app_handle: tauri::AppHandle) -> u64 {
     *simulation_speed
 }
 
-impl<'a> RunningSimulation<'a> {
-    pub fn stop(self) -> StoppedSimulation<'a> {
-        self.tx.send(()).unwrap();
-        StoppedSimulation {
-            simulation_speed: self.last_simulation_speed,
-            last_simulation_speed: Arc::new(Mutex::new(0)),
-            processes: Arc::clone(&self.processes),
-            resources: Arc::clone(&self.resources),
-        }
-    }
-}
-
-#[tauri::command]
-pub fn stop_simulation<'a>(app_handle: tauri::AppHandle) {
-    let state = app_handle.state::<Mutex<TauriSim>>();
-    let mut sim = state.lock().unwrap();
-    let sim = &mut sim.0;
-}
-
-impl<'a> StoppedSimulation<'a> {
-    pub fn start(self) -> RunningSimulation<'a> {
-        let (tx, rx) = channel();
-
+impl RunningSimulation {
+    // pub fn stop(self) -> StoppedSimulation  {
+    //     self.tx.send(()).unwrap();
+    //     StoppedSimulation {
+    //         simulation_speed: self.last_simulation_speed,
+    //         last_simulation_speed: Arc::new(Mutex::new(0)),
+    //         processes: Arc::clone(&self.processes),
+    //         resources: Arc::clone(&self.resources),
+    //     }
+    // }
+    pub fn start(&self) {
         // Run the simulation in a separate thread
-        let simulation_speed_clone = Arc::clone(&self.simulation_speed);
+        let simulation_speed_clone = self.simulation_speed.clone();
+        let resources_clone = self.resources.clone();
+        let processes_clone = self.processes.clone();
+
         thread::spawn(move || {
-            let last_update = Instant::now();
+            let mut last_update = Instant::now();
             loop {
-                if let Ok(_) = rx.try_recv() {
-                    break;
-                }
-
                 let simulation_speed = simulation_speed_clone.lock().unwrap();
+                let resources = resources_clone.lock().unwrap();
+                let processes = processes_clone.lock().unwrap();
 
-                todo!("Simulation logic goes here");
+                println!("Resources: {:?}", resources.len());
+                println!("Processes: {:?}", processes.len());
 
-                thread::sleep(Duration::from_millis(1000 / *simulation_speed));
+                drop(simulation_speed);
+                drop(resources);
+                drop(processes);
+
+                loop {
+                    let simulation_speed = simulation_speed_clone.lock().unwrap();
+                    let elapsed = last_update.elapsed().as_secs_f64();
+                    let div = (1.0 / *simulation_speed as f64) as f64;
+                    if *simulation_speed == 0 || (elapsed <= div) {
+                        thread::sleep(Duration::from_micros(1));
+                    } else {
+                        last_update = Instant::now();
+                        break;
+                    }
+                    drop(simulation_speed);
+                }
             }
         });
+    }
 
-        RunningSimulation {
-            simulation_speed: self.last_simulation_speed,
-            last_simulation_speed: self.simulation_speed,
-            processes: Arc::clone(&self.processes),
-            resources: Arc::clone(&self.resources),
-            tx,
-        }
+    pub fn stop(&self) {
+        let mut simulation_speed = self.simulation_speed.lock().unwrap();
+        let mut last_simulation_speed = self.last_simulation_speed.lock().unwrap();
+
+        let temp = *simulation_speed;
+
+        *simulation_speed = 0;
+        *last_simulation_speed = temp;
     }
 }
 
 #[tauri::command]
-pub fn start_simulation<'a>(app_handle: tauri::AppHandle) {
+pub fn stop_simulation(app_handle: tauri::AppHandle) {
     let state = app_handle.state::<Mutex<TauriSim>>();
-    let mut sim = state.lock().unwrap();
-    let sim = &mut sim.0;
+    let sim = state.lock().unwrap();
+    sim.0.stop();
+}
 
-    match sim {
-        Simulation::Running(_) => {}
-        Simulation::Stopped(sim) => {
-            sim.clone().start();
-        }
-    }
+#[tauri::command]
+pub fn start_simulation(app_handle: tauri::AppHandle) {
+    let state = app_handle.state::<Mutex<TauriSim>>();
+    let sim = state.lock().unwrap();
+    sim.0.start();
 }
 
 // remember to call `.manage(MyState::default())`
-#[tauri::command]
-pub fn initialize_simulation(app_handle: tauri::AppHandle) {
-    let state = app_handle.state::<Mutex<TauriSim>>();
-    let mut sim = state.lock().unwrap();
-    sim.0 = Simulation::Stopped(Simulation::new());
-}
+// #[tauri::command]
+// pub fn initialize_simulation(app_handle: tauri::AppHandle) {
+//     let state = app_handle.state::<Mutex<TauriSim>>();
+//     let mut sim = state.lock().unwrap();
+//     sim.0 = Simulation::Stopped(Simulation::new());
+// }
