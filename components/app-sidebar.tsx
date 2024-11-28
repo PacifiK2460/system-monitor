@@ -27,7 +27,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useTheme } from "next-themes"
 import { ToggleGroup, ToggleGroupItem } from "@radix-ui/react-toggle-group"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@radix-ui/react-tooltip"
-import { useEffect, useState } from "react"
+import { useContext } from "react"
 import { Badge } from "./ui/badge"
 
 import {
@@ -93,40 +93,13 @@ const ProcesoSchema = z.object({
     }),
 })
 
-// Define the process type
-type Process = {
-    Ready: {
-        id: string
-        name: string
-        intensity: number
-    },
-    Blocked: {
-        id: string
-        name: string
-        intensity: number
-    },
-    Working: {
-        id: string
-        name: string
-        intensity: number
-    }
-}
-
-// Define the resource type
-type Resource = {
-    id: string
-    name: string
-    totalAmount: number
-    usedAmount: number
-}
+import { SimulationContext } from "@/app/simulationContext"
+import { Process, ProcessReady, Resource } from "@/lib/defs"
+import Link from "next/link"
 
 export function AppSidebar() {
     const { setTheme } = useTheme()
-    // const [simState, setSimState] = useState < "stopped" || "running" > ("stopped")
-    const [simState, setSimState] = useState<"stopped" | "running">("running");
-    const [simulationSpeed, setSimulationSpeed] = useState(1)
-    const [processes, setProcesses] = useState<Process[]>([]);
-    const [resources, setResources] = useState<Resource[]>([]);
+    const SimulationData = useContext(SimulationContext)
 
     const resourceForm = useForm<z.infer<typeof ResourceSchema>>({
         resolver: zodResolver(ResourceSchema),
@@ -167,7 +140,8 @@ export function AppSidebar() {
             })
         })
 
-        setResources([...resources, nuevo_recurso])
+        // setResources([...resources, nuevo_recurso])
+        SimulationData.updateResources([...SimulationData.resources, nuevo_recurso])
 
         toast({
             title: "Recurso Agregado",
@@ -201,13 +175,13 @@ export function AppSidebar() {
                 intensity = "Low"
         }
 
-        const nuevo_proceso = await invoke("create_process", {
+        const _nuevo_proceso = invoke("create_process", {
             name: data.name,
             resourceIntensity: intensity,
             blocking: false
         })
             .then((nuevo_pro) => {
-                return nuevo_pro as Process
+                return nuevo_pro as ProcessReady;
             })
             .catch((error) => {
                 toast({
@@ -216,6 +190,8 @@ export function AppSidebar() {
                     description: `No se ha podido agregar el proceso ${data.name}. ${error}`,
                 })
             })
+
+        const nuevo_proceso = await _nuevo_proceso;
 
         if (!nuevo_proceso) {
             toast({
@@ -226,88 +202,74 @@ export function AppSidebar() {
             return;
         }
 
-        await Promise.all(data.resources.map(async (resource) => {
+        console.log("nuevo_proceso", nuevo_proceso)
+
+        data.resources.forEach(async (resource, index) => {
             await invoke("process_add_resource", {
-                processId: nuevo_proceso.Ready.id,
+                processId: nuevo_proceso.id,
                 resourceId: resource.id,
                 amount: resource.totalAmount,
             })
                 .then(() => {
-
+                    console.log(`${index + 1}/${data.resources.length} Recurso ${resource.id} asignado al proceso ${nuevo_proceso.name} (${nuevo_proceso.id})`)
                 })
                 .catch((error) => {
                     toast({
                         variant: "destructive",
                         title: "Error",
-                        description: `No se ha podido asignar el recurso ${resource.id} al proceso ${nuevo_proceso.Ready.name} (${nuevo_proceso.Ready.id}). ${error}`,
+                        description: `No se ha podido asignar el recurso ${resource.id} al proceso ${nuevo_proceso.name} (${nuevo_proceso.id}). ${error}`,
                     })
                 })
-        }));
-
-        invoke("simulation_add_process", {
-            name: nuevo_proceso.Ready.name,
-            resourceIntensity: intensity,
-        }).catch((error) => {
-            toast({
-                variant: "destructive",
-                title: "Error",
-                description: `No se ha podido agregar el proceso ${nuevo_proceso.Ready.name} (${nuevo_proceso.Ready.id}) a la simulación. ${error}`,
-            })
         })
 
-        setProcesses([...processes, nuevo_proceso])
+        const nuevo_proceso_full: Process = {
+            Ready: {
+                id: nuevo_proceso.id,
+                name: nuevo_proceso.name,
+                resource_intensity: data.intensity,
+                resource_slot: []
+            },
+            Blocked: {
+                id: nuevo_proceso.id,
+                name: nuevo_proceso.name,
+                resource_intensity: data.intensity,
+                resource_slot: []
+            },
+            Working: {
+                id: nuevo_proceso.id,
+                name: nuevo_proceso.name,
+                resource_intensity: data.intensity,
+                resource_slot: []
+            },
+        }
+
+        // setProcesses([...processes, nuevo_proceso_full])
+        SimulationData.updateProcesses([...SimulationData.processes, nuevo_proceso_full])
         toast({
             title: "Proceso Agregado",
-            description: `Se ha agregado el proceso ${nuevo_proceso.Ready.name} (${nuevo_proceso.Ready.id})`,
+            description: `Se ha agregado el proceso ${nuevo_proceso.name} (${nuevo_proceso.id})`,
         })
     }
-
-    useEffect(() => {
-        invoke("simulation_set_simulation_speed", { speed: simulationSpeed })
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [simulationSpeed])
-
-    useEffect(() => {
-        invoke("simulation_resources")
-            .then((res) => {
-                console.log("Resources", res)
-
-                // Check if the resources are the same
-                if (JSON.stringify(resources) === JSON.stringify(res)) {
-                    return
-                }
-                setResources(res as Resource[])
-            })
-            .catch((error) => {
-                console.error("Error getting resources", error)
-            })
-
-        invoke("simulation_processes")
-            .then((pros) => {
-                console.log("Processes R", pros)
-                // Check if the processes are the same
-                if (JSON.stringify(processes) === JSON.stringify(pros)) {
-                    return
-                }
-                setProcesses(pros as Process[])
-            })
-            .catch((error) => {
-                console.error("Error getting processes", error)
-            })
-
-        invoke("start_simulation")
-            .then(() => {
-                console.log("Simulation started")
-            })
-            .catch((error) => {
-                console.error("Error starting simulation", error)
-            })
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
 
     return (
         <Sidebar collapsible="icon">
             <SidebarContent>
+                <SidebarGroup>
+                    <SidebarGroupLabel>Aplicación</SidebarGroupLabel>
+                    <SidebarGroupContent>
+                        <SidebarMenu>
+                            <SidebarMenuItem>
+                                <SidebarMenuSubButton asChild>
+                                    <a href="/">
+                                        <SquareArrowOutUpRight />
+                                        Ver Recursos & Procesos
+                                    </a>
+                                </SidebarMenuSubButton>
+                            </SidebarMenuItem>
+                        </SidebarMenu>
+                    </SidebarGroupContent>
+                </SidebarGroup>
+
                 <SidebarGroup>
                     <SidebarGroupLabel className="gap-2">
                         <span>Recursos</span>
@@ -382,18 +344,18 @@ export function AppSidebar() {
                                 </CollapsibleTrigger>
                                 <CollapsibleContent>
                                     <SidebarMenuSub>
-                                        <SidebarMenuSubButton asChild>
-                                            <a href="/recursos">
-                                                <SquareArrowOutUpRight />
-                                                Ver los Recursos
-                                            </a>
-                                        </SidebarMenuSubButton>
+
                                         {
-                                            resources.map((resource) => (
+                                            SimulationData.resources.map((resource) => (
                                                 <SidebarMenuItem key={resource.id} className="flex">
                                                     <SidebarMenuSubButton>
-                                                        {resource.name}
-                                                        <Badge>{resource.id}</Badge>
+                                                        <Link href={{
+                                                            pathname: `/recurso/`,
+                                                            query: { id: resource.id }
+                                                        }} className="flex gap-2">
+                                                            {resource.name}
+                                                            <Badge>{resource.id}</Badge>
+                                                        </Link>
                                                     </SidebarMenuSubButton>
                                                 </SidebarMenuItem>
                                             ))
@@ -472,7 +434,7 @@ export function AppSidebar() {
                                                         </div>
 
                                                         <ScrollArea className="h-36 rounded-sm border px-1">
-                                                            {resources.map((item) => (
+                                                            {SimulationData.resources.map((item) => (
                                                                 <FormField
                                                                     key={item.id}
                                                                     control={processForm.control}
@@ -548,19 +510,17 @@ export function AppSidebar() {
                                 </CollapsibleTrigger>
                                 <CollapsibleContent>
                                     <SidebarMenuSub>
-                                        <SidebarMenuSubButton asChild>
-                                            <a href="/procesos">
-                                                <SquareArrowOutUpRight />
-                                                Ver los Procesos
-                                            </a>
-                                        </SidebarMenuSubButton>
-
                                         {
-                                            processes.map((process) => (
+                                            SimulationData.processes.map((process) => (
                                                 <SidebarMenuItem key={process.Ready.id} className="flex">
                                                     <SidebarMenuSubButton>
-                                                        {process.Ready.name}
-                                                        <Badge>{process.Ready.id}</Badge>
+                                                        <Link href={{
+                                                            pathname: `/proceso/`,
+                                                            query: { id: process.Ready.id }
+                                                        }} className="flex gap-2">
+                                                            {process.Ready.name}
+                                                            <Badge>{process.Ready.id}</Badge>
+                                                        </Link>
                                                     </SidebarMenuSubButton>
                                                 </SidebarMenuItem>
                                             ))
@@ -584,11 +544,10 @@ export function AppSidebar() {
                             <SidebarMenuItem className="flex justify-center">
                                 <ToggleGroup type="single">
                                     {
-                                        simState === "stopped" ?
+                                        SimulationData.simulationState === "stopped" ?
                                             <ToggleGroupItem value="continue" aria-label="Reanudar"
                                                 onClick={() => {
-                                                    invoke("start_simulation")
-                                                    setSimState("running")
+                                                    SimulationData.updateSimulationState("running")
                                                 }}
                                             >
                                                 <TooltipProvider>
@@ -605,8 +564,7 @@ export function AppSidebar() {
                                             :
                                             <ToggleGroupItem value="pause" aria-label="Pausar"
                                                 onClick={() => {
-                                                    invoke("stop_simulation")
-                                                    setSimState("stopped")
+                                                    SimulationData.updateSimulationState("stopped")
                                                 }}
                                             >
                                                 <TooltipProvider>
@@ -631,7 +589,7 @@ export function AppSidebar() {
                                 <ToggleGroup type="single" className="flex flex-wrap justify-evenly">
                                     <ToggleGroupItem value="stop" aria-label="Parar"
                                         onClick={() => {
-                                            if (simulationSpeed > 0) setSimulationSpeed(simulationSpeed - 1)
+                                            if (SimulationData.simulationSpeed > 0) SimulationData.updateSimulationSpeed(SimulationData.simulationSpeed - 1)
                                         }}
                                     >
                                         <TooltipProvider>
@@ -650,7 +608,7 @@ export function AppSidebar() {
                                             <Tooltip>
                                                 <TooltipTrigger asChild className="flex justify-center">
                                                     <span>
-                                                        {simulationSpeed}
+                                                        {SimulationData.simulationSpeed}
                                                     </span>
                                                 </TooltipTrigger>
                                                 <TooltipContent className="dark:bg-black/30 bg-black/5 backdrop-blur-3xl p-2 rounded-md border dark:border-white/10 border-black/10">
@@ -661,7 +619,8 @@ export function AppSidebar() {
                                     </ToggleGroupItem>
                                     <ToggleGroupItem value="continue" aria-label="Reanudar"
                                         onClick={() => {
-                                            setSimulationSpeed(simulationSpeed + 1)
+                                            SimulationData.updateSimulationSpeed(SimulationData.simulationSpeed + 1)
+                                            // setSimulationSpeed(simulationSpeed + 1)
                                         }}
                                     >
                                         <TooltipProvider>

@@ -2,13 +2,13 @@
 
 use nanoid::nanoid;
 use rand::Rng;
-use std::{marker::PhantomData, sync::Mutex};
+use std::{marker::PhantomData, os::windows::process, sync::Mutex};
 use tauri::{Manager, State};
 
 use crate::{AllSimulationTrait, GenericResource, Simulation, TauriSim};
 
 #[non_exhaustive]
-#[derive(Clone, PartialEq, Copy, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, PartialEq, Copy, serde::Serialize, serde::Deserialize, Debug)]
 pub enum GenericProcessResourceIntensity {
     None = 0,
     Low = 1,
@@ -17,7 +17,7 @@ pub enum GenericProcessResourceIntensity {
     Extreme = 4,
 }
 
-#[derive(Clone, PartialEq, serde::Serialize)]
+#[derive(Clone, PartialEq, serde::Serialize, Debug)]
 pub struct ResourceSlot {
     resource_id: String,
     id: String,
@@ -41,7 +41,7 @@ pub struct Process {
     _marker: PhantomData<()>,
 }
 
-#[derive(Clone, PartialEq, serde::Serialize)]
+#[derive(Clone, PartialEq, serde::Serialize, Debug)]
 pub struct ReadyProcess {
     name: String,
     id: String,
@@ -49,7 +49,7 @@ pub struct ReadyProcess {
     resource_slot: Vec<ResourceSlot>,
 }
 
-#[derive(Clone, PartialEq, serde::Serialize)]
+#[derive(Clone, PartialEq, serde::Serialize, Debug)]
 pub struct BlockedProcess {
     name: String,
     id: String,
@@ -57,7 +57,7 @@ pub struct BlockedProcess {
     resource_slot: Vec<ResourceSlot>,
 }
 
-#[derive(Clone, PartialEq, serde::Serialize)]
+#[derive(Clone, PartialEq, serde::Serialize, Debug)]
 pub struct WorkingProcess {
     name: String,
     id: String,
@@ -79,7 +79,8 @@ impl Process {
 }
 
 pub trait AllProcessTraits {
-    fn remove_resource(&mut self, resource: String) -> Option<()>;
+    fn remove_resource(&mut self, resource_id: String) -> Option<()>;
+    fn add_resource(&mut self, resource: &GenericResource, amount: u64) -> Option<()>;
     fn resource_slot_mut(&mut self) -> &mut Vec<ResourceSlot>;
     fn name(&self) -> String;
     fn resource_intensity(&self) -> &GenericProcessResourceIntensity;
@@ -136,6 +137,17 @@ pub trait AllProcessTraits {
 
 //         roll < intensity
 //     }
+
+//     fn add_resource(&mut self, resource: GenericResource, amount: u64) -> Option<()> {
+//         // Search for the resource by its id
+//         // If the resource is found, add it to the resource slot
+//         // If the resource is not found, return None
+
+//         self.resource_slot_mut()
+//             .push(ResourceSlot::new(&resource, amount));
+
+//         Some(())
+//     }
 // }
 
 macro_rules! impl_AllProcessTraits {
@@ -154,6 +166,13 @@ macro_rules! impl_AllProcessTraits {
                     }
                     None => None,
                 }
+            }
+
+            fn add_resource(&mut self, resource: &GenericResource, amount: u64) -> Option<()> {
+                self.resource_slot_mut()
+                    .push(ResourceSlot::new(&resource, amount));
+
+                Some(())
             }
 
             fn id(&self) -> String {
@@ -256,7 +275,7 @@ impl WorkingProcess {
     }
 }
 
-#[derive(Clone, PartialEq, serde::Serialize)]
+#[derive(Clone, PartialEq, serde::Serialize, Debug)]
 pub enum ProcessStates {
     Ready(ReadyProcess),
     Blocked(BlockedProcess),
@@ -265,10 +284,21 @@ pub enum ProcessStates {
 
 #[tauri::command]
 pub fn create_process(
+    app_handle: tauri::AppHandle,
     name: String,
     resource_intensity: GenericProcessResourceIntensity,
 ) -> ReadyProcess {
-    Process::new(name, resource_intensity)
+    let state = app_handle.state::<Mutex<TauriSim>>();
+    let sim = state.lock().unwrap();
+    let proceses = sim.0.processes();
+
+    let new_process = Process::new(name, resource_intensity);
+    proceses
+        .lock()
+        .unwrap()
+        .push(ProcessStates::Ready(new_process.clone()));
+
+    new_process
 }
 
 #[tauri::command]
@@ -277,65 +307,61 @@ pub fn process_add_resource(
     process_id: String,
     resource_id: String,
     amount: u64,
-) -> Option<()> {
+) -> Result<(), String> {
     let state = app_handle.state::<Mutex<TauriSim>>();
     let sim = state.lock().unwrap();
-    let running_binding = sim.0.processes();
-    let processes = running_binding.lock().unwrap();
 
-    let resource_binding = sim.0.resources();
-    let resources = resource_binding.lock().unwrap();
+    let processes = sim.0.processes();
+    let resources = sim.0.resources();
 
-    let process = match processes
-        .iter()
-        .find(|p| match p {
-            ProcessStates::Ready(process) => process.id == process_id,
-            ProcessStates::Blocked(process) => process.id == process_id,
-            ProcessStates::Working(process) => process.id == process_id,
-        })
-        .cloned()
-    {
-        Some(process_found) => process_found,
-        None => return None,
-    };
+    let mut binding = processes.lock().unwrap();
+    let process = binding.iter_mut().find(|p| match p {
+        ProcessStates::Ready(process) => process.id == process_id,
+        ProcessStates::Blocked(process) => process.id == process_id,
+        ProcessStates::Working(process) => process.id == process_id,
+    });
 
-    let resource = match resources.iter().find(|r| r.id() == resource_id).cloned() {
-        Some(resource_found) => resource_found,
-        None => return None,
-    };
+    let binding = resources.lock().unwrap();
+    let resource = binding.iter().find(|r| r.id() == resource_id);
+
+    if process.is_none() {
+        return Err("Process not found".to_string());
+    }
+
+    if resource.is_none() {
+        return Err("Resource not found".to_string());
+    }
+
+    let process = process.unwrap();
+    let resource = resource.unwrap();
 
     match process {
-        ProcessStates::Ready(mut process) => {
-            process
-                .resource_slot_mut()
-                .push(ResourceSlot::new(&resource, amount));
-            Some(())
+        ProcessStates::Ready(process) => {
+            process.add_resource(resource, amount);
         }
-        ProcessStates::Blocked(mut process) => {
-            process
-                .resource_slot_mut()
-                .push(ResourceSlot::new(&resource, amount));
-            Some(())
+        ProcessStates::Blocked(process) => {
+            process.add_resource(resource, amount);
         }
-        ProcessStates::Working(mut process) => {
-            process
-                .resource_slot_mut()
-                .push(ResourceSlot::new(&resource, amount));
-            Some(())
+        ProcessStates::Working(process) => {
+            process.add_resource(resource, amount);
         }
     }
+    Ok(())
 }
 
 #[tauri::command]
-pub fn process_remove_resource(app_handle: tauri::AppHandle, resource_id: String) -> Option<()> {
+pub fn process_remove_resource(
+    app_handle: tauri::AppHandle,
+    resource_id: String,
+) -> Result<(), String> {
     let state = app_handle.state::<Mutex<TauriSim>>();
     let mut sim = state.lock().unwrap();
     let running_binding = sim.0.resources();
     let resources = running_binding.lock().unwrap();
 
     match resources.iter().find(|r| r.id() == resource_id).cloned() {
-        Some(resource_found) => return Some(sim.0.remove_resource(&resource_found)),
-        None => return None,
+        Some(resource_found) => return Ok(sim.0.remove_resource(&resource_found)),
+        None => return Err("Resource not found".to_string()),
     }
 }
 
@@ -343,7 +369,7 @@ pub fn process_remove_resource(app_handle: tauri::AppHandle, resource_id: String
 pub fn process_get_resource_intensity(
     app_handle: tauri::AppHandle,
     process_id: String,
-) -> GenericProcessResourceIntensity {
+) -> Result<GenericProcessResourceIntensity, String> {
     let state = app_handle.state::<Mutex<TauriSim>>();
     let sim = state.lock().unwrap();
     let running_binding = sim.0.processes();
@@ -359,16 +385,20 @@ pub fn process_get_resource_intensity(
         .cloned()
     {
         Some(process_found) => match process_found {
-            ProcessStates::Ready(process) => return process.resource_intensity,
-            ProcessStates::Blocked(process) => return process.resource_intensity,
-            ProcessStates::Working(process) => return process.resource_intensity,
+            ProcessStates::Ready(process) => return Ok(process.resource_intensity),
+            ProcessStates::Blocked(process) => return Ok(process.resource_intensity),
+            ProcessStates::Working(process) => return Ok(process.resource_intensity),
         },
-        None => return GenericProcessResourceIntensity::None,
+        None => return Err("Process not found".to_string()),
     }
 }
 
 #[tauri::command]
-pub fn process_set_name(app_handle: tauri::AppHandle, process_id: String, name: String) {
+pub fn process_set_name(
+    app_handle: tauri::AppHandle,
+    process_id: String,
+    name: String,
+) -> Result<(), String> {
     let state = app_handle.state::<Mutex<TauriSim>>();
     let sim = state.lock().unwrap();
     let running_binding = sim.0.processes();
@@ -385,18 +415,21 @@ pub fn process_set_name(app_handle: tauri::AppHandle, process_id: String, name: 
         .cloned()
     {
         Some(process_found) => match process_found {
-            ProcessStates::Ready(mut process) => process.set_name(name),
-            ProcessStates::Blocked(mut process) => process.set_name(name),
-            ProcessStates::Working(mut process) => process.set_name(name),
+            ProcessStates::Ready(mut process) => Ok(process.set_name(name)),
+            ProcessStates::Blocked(mut process) => Ok(process.set_name(name)),
+            ProcessStates::Working(mut process) => Ok(process.set_name(name)),
         },
         None => {
-            return;
+            return Err("Process not found".to_string());
         }
     }
 }
 
 #[tauri::command]
-pub fn process_get_name(app_handle: tauri::AppHandle, process_id: String) -> Option<String> {
+pub fn process_get_name(
+    app_handle: tauri::AppHandle,
+    process_id: String,
+) -> Result<String, String> {
     let state = app_handle.state::<Mutex<TauriSim>>();
     let sim = state.lock().unwrap();
     let running_binding = sim.0.processes();
@@ -413,11 +446,11 @@ pub fn process_get_name(app_handle: tauri::AppHandle, process_id: String) -> Opt
         .cloned()
     {
         Some(process_found) => match process_found {
-            ProcessStates::Ready(process) => return Some(process.name),
-            ProcessStates::Blocked(process) => return Some(process.name),
-            ProcessStates::Working(process) => return Some(process.name),
+            ProcessStates::Ready(process) => return Ok(process.name),
+            ProcessStates::Blocked(process) => return Ok(process.name),
+            ProcessStates::Working(process) => return Ok(process.name),
         },
-        None => return None,
+        None => return Err("Process not found".to_string()),
     }
 }
 

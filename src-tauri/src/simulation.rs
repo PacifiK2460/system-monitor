@@ -71,10 +71,12 @@ pub trait AllSimulationTrait {
     fn add_process(&mut self, process: ProcessStates);
     fn remove_process(&mut self, process: &ProcessStates);
     fn processes(&self) -> Arc<Mutex<Vec<ProcessStates>>>;
+    fn get_process_by_id(&self, id: String) -> Option<ProcessStates>;
 
     fn add_resource(&mut self, resource: GenericResource);
     fn remove_resource(&mut self, resource: &GenericResource);
     fn resources(&self) -> Arc<Mutex<Vec<GenericResource>>>;
+    fn get_resource_by_id(&self, id: String) -> Option<GenericResource>;
 
     fn set_simulation_speed(&mut self, speed: u64);
     fn simulation_speed(&self) -> Arc<Mutex<u64>>;
@@ -135,6 +137,24 @@ impl AllSimulationTrait for Simulation {
             Simulation::Running(sim) => sim.simulation_speed(),
             Simulation::Stopped(sim) => sim.simulation_speed(),
         }
+    }
+
+    fn get_process_by_id(&self, id: String) -> Option<ProcessStates> {
+        let binding = self.processes();
+        let processes = binding.lock().unwrap();
+        let process = processes.iter().find(|p| match p {
+            ProcessStates::Ready(ready_process) => ready_process.id() == id,
+            ProcessStates::Blocked(blocked_process) => blocked_process.id() == id,
+            ProcessStates::Working(working_process) => working_process.id() == id,
+        });
+        process.cloned()
+    }
+
+    fn get_resource_by_id(&self, id: String) -> Option<GenericResource> {
+        let binding = self.resources();
+        let resources = binding.lock().unwrap();
+        let resource = resources.iter().find(|r| r.id() == id);
+        resource.cloned()
     }
 }
 
@@ -232,6 +252,24 @@ macro_rules! impl_AllSimulationTrait {
                     self.resources().lock().unwrap().remove(index);
                 }
             }
+            
+            fn get_process_by_id(&self, id: String) -> Option<ProcessStates> {
+                let binding = self.processes();
+                let processes = binding.lock().unwrap();
+                let process = processes.iter().find(|p| match p {
+                    ProcessStates::Ready(ready_process) => ready_process.id() == id,
+                    ProcessStates::Blocked(blocked_process) => blocked_process.id() == id,
+                    ProcessStates::Working(working_process) => working_process.id() == id,
+                });
+                process.cloned()
+            }
+
+            fn get_resource_by_id(&self, id: String) -> Option<GenericResource> {
+                let binding = self.resources();
+                let resources = binding.lock().unwrap();
+                let resource = resources.iter().find(|r| r.id() == id);
+                resource.cloned()
+            }
 
         })*
     }
@@ -323,8 +361,8 @@ impl RunningSimulation {
                 let resources = resources_clone.lock().unwrap();
                 let processes = processes_clone.lock().unwrap();
 
-                println!("Resources: {:?}", resources.len());
-                println!("Processes: {:?}", processes.len());
+                println!("Resources: {:?}", resources);
+                println!("Processes: {:?}", processes);
 
                 drop(simulation_speed);
                 drop(resources);
