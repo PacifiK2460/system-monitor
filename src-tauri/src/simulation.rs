@@ -361,8 +361,20 @@ impl RunningSimulation {
                 let resources = resources_clone.lock().unwrap();
                 let processes = processes_clone.lock().unwrap();
 
-                println!("Resources: {:?}", resources);
-                println!("Processes: {:?}", processes);
+                /*
+                    We are gonna check for a safe state.
+                    We make a matrix of size n x m, where n is the number of processes.
+                    We make a vector of size m, where m is the number of resources.
+
+                    We initialize the matrix with the resource requirements of each process.
+                    We initialize the vector with the available resources.
+
+                    We iterate over the matrix, checking if the process can be allocated the resources, then 
+                    continue to the next process. If the process can't be allocated the resources, we break the loop
+                    and return false.
+
+                    If we reach the end of the matrix, we return true.
+                 */
 
                 drop(simulation_speed);
                 drop(resources);
