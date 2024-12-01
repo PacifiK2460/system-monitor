@@ -13,22 +13,17 @@ import {
 
 import { SimulationContext } from "@/app/simulationContext"
 import { useContext } from "react"
-import { useSearchParams } from 'next/navigation'
 import { Badge } from "@/components/ui/badge"
-import { Resource } from "@/lib/defs"
+
 
 export default function ResourcePage() {
-    const searchParams = useSearchParams()
-    const id = searchParams.get('id')
     const SimulationData = useContext(SimulationContext)
 
-    const resource = SimulationData.resources.find((resource) => resource.id === id) as (Resource | undefined)
+    const resource = SimulationData.resourceToView;
 
     if (!resource) {
         return <div>Resource not found</div>
     }
-
-    console.log(resource)
 
     return (
         <div className="font-[family-name:var(--font-geist-sans)] mx-5">
@@ -58,7 +53,7 @@ export default function ResourcePage() {
                         // })
                         SimulationData.processes.map((process) => {
                             return process.Ready.resource_slot.map((resource_slot) => {
-                                if (resource_slot.resource_id === id) {
+                                if (resource_slot.resource_id === resource.id) {
                                     return (
                                         <TableRow key={resource_slot.resource_id}>
                                             <TableCell className="first:font-medium last:text-right">{process.Ready.name}</TableCell>
@@ -78,7 +73,7 @@ export default function ResourcePage() {
                             {
                                 SimulationData.processes.reduce((acc, process) => {
                                     return acc + process.Ready.resource_slot.reduce((acc, resource_slot) => {
-                                        return resource_slot.resource_id === id ? acc + resource_slot.current_amount : acc
+                                        return resource_slot.resource_id === resource.id ? acc + resource_slot.current_amount : acc
                                     }, 0)
                                 }, 0)
                             }

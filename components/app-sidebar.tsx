@@ -105,7 +105,7 @@ const ProcessToDdeleteSchema = z.object({
 
 import { SimulationContext } from "@/app/simulationContext"
 import { Process, ProcessReady, Resource } from "@/lib/defs"
-import Link from "next/link"
+import router from "next/router"
 
 export function AppSidebar() {
     const { setTheme } = useTheme()
@@ -269,7 +269,30 @@ export function AppSidebar() {
     })
 
     async function onProcessToDeleteSubmit(data: z.infer<typeof ProcessToDdeleteSchema>) {
-        console.log("data", data)
+        // console.log("data", data)
+        // for evert id invoke simulation_remove_process
+
+        data.id.forEach(async (process) => {
+            await invoke("simulation_remove_process", {
+                processId: process.id,
+            })
+                .then(() => {
+                    console.log(`Proceso ${process.id} eliminado`)
+                })
+                .catch((error) => {
+                    toast({
+                        variant: "destructive",
+                        title: "Error",
+                        description: `No se ha podido eliminar el proceso ${process.id}. ${error}`,
+                    })
+                })
+        })
+
+        SimulationData.updateProcesses(SimulationData.processes.filter((process) => {
+            return !data.id.some((item) => item.id === process.Ready.id)
+        }))
+
+        SimulationData.updateProcessesToDelete([]);
     }
 
 
@@ -382,13 +405,15 @@ export function AppSidebar() {
                                                 SimulationData.resources.map((resource) => (
                                                     <SidebarMenuItem key={resource.id} className="flex">
                                                         <SidebarMenuSubButton>
-                                                            <Link href={{
-                                                                pathname: `/recurso/`,
-                                                                query: { id: resource.id }
-                                                            }} className="flex gap-2">
+                                                            <p className="flex gap-2"
+                                                                onClick={() => {
+                                                                    SimulationData.setResourceToView(resource)
+                                                                    router.push(`/recurso`)
+                                                                }}
+                                                            >
                                                                 {resource.name}
                                                                 <Badge>{resource.id}</Badge>
-                                                            </Link>
+                                                            </p>
                                                         </SidebarMenuSubButton>
                                                     </SidebarMenuItem>
                                                 ))
@@ -545,13 +570,15 @@ export function AppSidebar() {
                                                 SimulationData.processes.map((process) => (
                                                     <SidebarMenuItem key={process.Ready.id} className="flex">
                                                         <SidebarMenuSubButton>
-                                                            <Link href={{
-                                                                pathname: `/proceso/`,
-                                                                query: { id: process.Ready.id }
-                                                            }} className="flex gap-2">
+                                                            <p className="flex gap-2"
+                                                                onClick={() => {
+                                                                    SimulationData.setProcessToView(process)
+                                                                    router.push(`/proceso`)
+                                                                }}
+                                                            >
                                                                 {process.Ready.name}
                                                                 <Badge>{process.Ready.id}</Badge>
-                                                            </Link>
+                                                            </p>
                                                         </SidebarMenuSubButton>
                                                     </SidebarMenuItem>
                                                 ))
@@ -763,7 +790,7 @@ export function AppSidebar() {
                                                                                         : field.onChange(currentValue.filter((value) => value.id !== process.Ready.id));
                                                                                 }}
 
-                                                                                
+
                                                                             />
                                                                         </FormControl>
                                                                         <FormLabel className="text-sm font-normal flex flex-row gap-2">

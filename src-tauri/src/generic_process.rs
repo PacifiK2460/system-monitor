@@ -94,7 +94,7 @@ impl ReadyProcess {
 
             if roll >= intensity {
                 let roll = (rng.gen::<f64>() % 4.0) + 1.0;
-                let amount_to_use = resource_slot.base_amount as f64 * ((roll / 10.0) + 1.0);
+                let amount_to_use = resource_slot.base_amount as f64 * ((roll) + 1.0);
                 let truncated = amount_to_use as u64;
                 resource_slot.current_amount = truncated;
             }

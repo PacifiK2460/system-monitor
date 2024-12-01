@@ -460,7 +460,26 @@ impl RunningSimulation {
                 let mut simulation_speed = simulation_speed_clone.lock().unwrap();
                 let mut last_simulation_speed = last_simulation_speed_clone.lock().unwrap();
                 let resources = resources_clone.lock().unwrap();
-                let processes = processes_clone.lock().unwrap();
+                let mut processes = processes_clone.lock().unwrap();
+
+                // Prepare all processes
+                for process in processes.iter_mut() {
+                    match process {
+                        ProcessStates::Ready(ready_process) => {
+                            ready_process.prepare();
+                        }
+                        _ => continue,
+                    }
+                }
+
+                match app.emit::<Vec<ProcessStates>>("processes", processes.clone()) {
+                    Ok(_) => {
+                        println!("Emitted processes");
+                    }
+                    Err(e) => {
+                        println!("Error: {}", e);
+                    }
+                }
 
                 // Check if it is safe to continue
                 if !safe_to_continue(processes.clone(), resources.clone()) {
@@ -507,14 +526,14 @@ impl RunningSimulation {
                     *simulation_speed = 0;
                     *last_simulation_speed = temp;
 
-                    match app.emit("simulation_stopped", 0) {
-                        Ok(_) => {
-                            println!("Emitted simulation_stopped");
-                        }
-                        Err(e) => {
-                            println!("Error: {}", e);
-                        }
-                    }
+                    // match app.emit("simulation_stopped", 0) {
+                    //     Ok(_) => {
+                    //         println!("Emitted simulation_stopped");
+                    //     }
+                    //     Err(e) => {
+                    //         println!("Error: {}", e);
+                    //     }
+                    // }
                 } else {
                     drop(simulation_speed);
                     drop(resources);

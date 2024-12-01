@@ -40,6 +40,7 @@ fn main() {
             generic_process::process_set_name,
             generic_process::process_get_name,
             generic_process::process_set_resource_intensity,
+            simulation::simulation_remove_process,
             simulation::simulation_add_process,
             simulation::simulation_add_resource,
             simulation::simulation_processes,

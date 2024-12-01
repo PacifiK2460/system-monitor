@@ -13,15 +13,11 @@ import {
 
 import { SimulationContext } from "@/app/simulationContext"
 import { useContext } from "react"
-import { useSearchParams } from 'next/navigation'
 import { Badge } from "@/components/ui/badge"
-import { Process } from "@/lib/defs"
 
 export default function ProcessPage() {
-    const searchParams = useSearchParams()
-    const id = searchParams.get('id')
     const SimulationData = useContext(SimulationContext)
-    const process = SimulationData.processes.find((process) => process.Ready.id === id) as (Process | undefined)
+    const process = SimulationData.processToView;
 
     if (!process) {
         return <div>Process not found</div>

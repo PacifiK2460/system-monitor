@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "tauri-app",
+        "title": "System Monitor",
         "width": 1300,
         "height": 700,
         "minHeight": 700,

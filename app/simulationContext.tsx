@@ -20,6 +20,11 @@ type SimulationData = {
   updateSimulationState: (newState: "stopped" | "running") => void;
 
   listen: <T>(event: EventName, handler: EventCallback<T>) => Promise<UnlistenFn>;
+
+  processToView: Process | null;
+  resourceToView: Resource | null;
+  setProcessToView: (process: Process) => void;
+  setResourceToView: (resource: Resource) => void;
 };
 
 interface SimulationProviderProps {
@@ -39,6 +44,11 @@ export const SimulationContext = createContext<SimulationData>({
   updateSimulationState: () => { },
 
   listen: async () => { return () => { } },
+
+  processToView: null,
+  resourceToView: null,
+  setProcessToView: () => { },
+  setResourceToView: () => { },
 })
 
 export const SimulationProvider = ({ children }: SimulationProviderProps) => {
@@ -55,6 +65,11 @@ export const SimulationProvider = ({ children }: SimulationProviderProps) => {
     updateSimulationState: () => { },
 
     listen: async () => { return () => { } },
+
+    processToView: null,
+    resourceToView: null,
+    setProcessToView: () => { },
+    setResourceToView: () => { },
   });
 
   const updateProcesses = useCallback((newProcesses: Process[]) => {
@@ -101,6 +116,20 @@ export const SimulationProvider = ({ children }: SimulationProviderProps) => {
     }));
   }, []);
 
+  const setProcessToView = useCallback((process: Process) => {
+    setSimulationData((prev) => ({
+      ...prev,
+      processToView: process,
+    }));
+  }, []);
+
+  const setResourceToView = useCallback((resource: Resource) => {
+    setSimulationData((prev) => ({
+      ...prev,
+      resourceToView: resource,
+    }));
+  }, []);
+
   async function setupListen() {
     const listen = (await import('@tauri-apps/api/event')).listen
     setSimulationData((prev) => ({
@@ -121,7 +150,11 @@ export const SimulationProvider = ({ children }: SimulationProviderProps) => {
     updateSimulationSpeed,
     updateSimulationState,
     listen: simulationData.listen,
-  }), [simulationData.listen, simulationData.processToDelete, simulationData.processes, simulationData.resources, simulationData.simulationSpeed, simulationData.simulationState, updatePorcessToDelete, updateProcesses, updateResources, updateSimulationSpeed, updateSimulationState]);
+    setProcessToView,
+    setResourceToView,
+    processToView: simulationData.processToView,
+    resourceToView: simulationData.resourceToView,
+  }), [setProcessToView, setResourceToView, simulationData.listen, simulationData.processToDelete, simulationData.processToView, simulationData.processes, simulationData.resourceToView, simulationData.resources, simulationData.simulationSpeed, simulationData.simulationState, updatePorcessToDelete, updateProcesses, updateResources, updateSimulationSpeed, updateSimulationState]);
 
   useEffect(() => {
     invoke("simulation_resources")
@@ -162,6 +195,10 @@ export const SimulationProvider = ({ children }: SimulationProviderProps) => {
     simulationDataValue.updateProcessesToDelete(processes);
     simulationDataValue.updateSimulationSpeed(0);
     simulationDataValue.updateSimulationState("stopped");
+  })
+
+  simulationDataValue.listen<Process[]>("processes", (event) => {
+    simulationDataValue.updateProcesses(event.payload);
   })
 
   return (
