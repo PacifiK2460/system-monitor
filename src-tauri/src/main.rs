@@ -52,14 +52,15 @@ fn main() {
         .setup(move |app| {
             app.manage(Mutex::new(TauriSim(RunningSimulation::new())));
 
-            let window = app.get_window("main").unwrap();
+            let window = app.get_webview_window("main").unwrap();
 
             #[cfg(target_os = "macos")]
             apply_vibrancy(&window, NSVisualEffectMaterial::HudWindow, None, None)
                 .expect("Unsupported platform! 'apply_vibrancy' is only supported on macOS");
 
             #[cfg(target_os = "windows")]
-            apply_acrylic(&window, Some((0, 0, 0, 0)))
+            // apply_acrylic(&window, Some((0, 0, 0, 0)))
+            apply_acrylic(&window, Some((18, 18, 18, 125)))
                 .expect("Unsupported platform! 'apply_blur' is only supported on Windows");
 
             // Add decorators to the window
@@ -67,7 +68,7 @@ fn main() {
                 .set_decorations(true)
                 .expect("Failed to set window decorations");
 
-            simulation::start_simulation(app.app_handle());
+            simulation::start_simulation(app.app_handle().clone());
 
             Ok(())
         })

@@ -34,6 +34,22 @@ impl ResourceSlot {
             id: nanoid!(7),
         }
     }
+
+    pub fn id(&self) -> String {
+        self.id.clone()
+    }
+
+    pub fn resource_id(&self) -> String {
+        self.resource_id.clone()
+    }
+
+    pub fn current_amount(&self) -> u64 {
+        self.current_amount
+    }
+
+    pub fn base_amount(&self) -> u64 {
+        self.base_amount
+    }
 }
 
 #[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -65,6 +81,69 @@ pub struct WorkingProcess {
     resource_slot: Vec<ResourceSlot>,
 }
 
+impl ReadyProcess {
+    pub fn prepare(&mut self) -> &Self {
+        if self.resource_intensity == GenericProcessResourceIntensity::None {
+            return self;
+        }
+
+        let intensity = self.resource_intensity as u64;
+        for resource_slot in self.resource_slot_mut().iter_mut() {
+            let mut rng = rand::thread_rng();
+            let roll = (rng.gen::<u64>() % 4) + 1;
+
+            if roll >= intensity {
+                let roll = (rng.gen::<f64>() % 4.0) + 1.0;
+                let amount_to_use = resource_slot.base_amount as f64 * ((roll / 10.0) + 1.0);
+                let truncated = amount_to_use as u64;
+                resource_slot.current_amount = truncated;
+            }
+        }
+
+        return self;
+    }
+
+    pub fn run(self) -> WorkingProcess {
+        WorkingProcess {
+            name: self.name,
+            resource_intensity: self.resource_intensity,
+            resource_slot: self.resource_slot,
+            id: self.id,
+        }
+    }
+
+    pub fn block(self) -> BlockedProcess {
+        BlockedProcess {
+            name: self.name,
+            resource_intensity: self.resource_intensity,
+            resource_slot: self.resource_slot,
+            id: self.id,
+        }
+    }
+}
+
+impl BlockedProcess {
+    pub fn unblock(self) -> ReadyProcess {
+        ReadyProcess {
+            name: self.name,
+            resource_intensity: self.resource_intensity,
+            resource_slot: self.resource_slot,
+            id: self.id,
+        }
+    }
+}
+
+impl WorkingProcess {
+    pub fn finish(self) -> ReadyProcess {
+        ReadyProcess {
+            name: self.name,
+            resource_intensity: self.resource_intensity,
+            resource_slot: self.resource_slot,
+            id: self.id,
+        }
+    }
+}
+
 impl Process {
     pub fn new(name: String, resource_intensity: GenericProcessResourceIntensity) -> ReadyProcess {
         let resource_list = vec![];
@@ -82,6 +161,7 @@ pub trait AllProcessTraits {
     fn remove_resource(&mut self, resource_id: String) -> Option<()>;
     fn add_resource(&mut self, resource: &GenericResource, amount: u64) -> Option<()>;
     fn resource_slot_mut(&mut self) -> &mut Vec<ResourceSlot>;
+    fn resource_slot(&self) -> &Vec<ResourceSlot>;
     fn name(&self) -> String;
     fn resource_intensity(&self) -> &GenericProcessResourceIntensity;
     fn set_name(&mut self, name: String);
@@ -183,6 +263,10 @@ macro_rules! impl_AllProcessTraits {
                 &mut self.resource_slot
             }
 
+            fn resource_slot(&self) -> &Vec<ResourceSlot> {
+                &self.resource_slot
+            }
+
             fn name(&self) -> String {
                 self.name.clone()
             }
@@ -212,68 +296,6 @@ macro_rules! impl_AllProcessTraits {
 }
 
 impl_AllProcessTraits!(for ReadyProcess, BlockedProcess, WorkingProcess);
-
-impl ReadyProcess {
-    fn prepare(&mut self) -> &Self {
-        if self.resource_intensity == GenericProcessResourceIntensity::None {
-            return self;
-        }
-
-        let intensity = self.resource_intensity as u64;
-        for resource_slot in self.resource_slot_mut().iter_mut() {
-            let mut rng = rand::thread_rng();
-            let roll: u64 = rng.gen::<u64>() * 10;
-
-            if roll < intensity as u64 {
-                let amount_to_use = resource_slot.base_amount * (roll / 10);
-
-                resource_slot.current_amount = amount_to_use;
-            }
-        }
-
-        return self;
-    }
-
-    fn run(self) -> WorkingProcess {
-        WorkingProcess {
-            name: self.name,
-            resource_intensity: self.resource_intensity,
-            resource_slot: self.resource_slot,
-            id: self.id,
-        }
-    }
-
-    fn block(self) -> BlockedProcess {
-        BlockedProcess {
-            name: self.name,
-            resource_intensity: self.resource_intensity,
-            resource_slot: self.resource_slot,
-            id: self.id,
-        }
-    }
-}
-
-impl BlockedProcess {
-    fn unblock(self) -> ReadyProcess {
-        ReadyProcess {
-            name: self.name,
-            resource_intensity: self.resource_intensity,
-            resource_slot: self.resource_slot,
-            id: self.id,
-        }
-    }
-}
-
-impl WorkingProcess {
-    fn finish(self) -> ReadyProcess {
-        ReadyProcess {
-            name: self.name,
-            resource_intensity: self.resource_intensity,
-            resource_slot: self.resource_slot,
-            id: self.id,
-        }
-    }
-}
 
 #[derive(Clone, PartialEq, serde::Serialize, Debug)]
 pub enum ProcessStates {

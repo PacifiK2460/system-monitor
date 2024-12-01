@@ -40,7 +40,7 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog"
 
-import { invoke } from '@tauri-apps/api/tauri';
+import { invoke } from '@tauri-apps/api/core';
 // import { listen } from '@tauri-apps/api/event';
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
@@ -90,6 +90,16 @@ const ProcesoSchema = z.object({
         }),
     })).refine((value) => value.some((item) => item), {
         message: "Debe seleccionar al menos un recurso",
+    }),
+})
+
+const ProcessToDdeleteSchema = z.object({
+    id: z.array(
+        z.object({
+            id: z.string(),
+        })
+    ).refine((value) => value.some((item) => item), {
+        message: "Debe seleccionar al menos un proceso",
     }),
 })
 
@@ -251,219 +261,241 @@ export function AppSidebar() {
         })
     }
 
+    const processToDeleteForm = useForm<z.infer<typeof ProcessToDdeleteSchema>>({
+        resolver: zodResolver(ProcessToDdeleteSchema),
+        defaultValues: {
+            id: [],
+        },
+    })
+
+    async function onProcessToDeleteSubmit(data: z.infer<typeof ProcessToDdeleteSchema>) {
+        console.log("data", data)
+    }
+
+
     return (
-        <Sidebar collapsible="icon">
-            <SidebarContent>
-                <SidebarGroup>
-                    <SidebarGroupLabel>Aplicación</SidebarGroupLabel>
-                    <SidebarGroupContent>
-                        <SidebarMenu>
-                            <SidebarMenuItem>
-                                <SidebarMenuSubButton asChild>
-                                    <a href="/">
-                                        <SquareArrowOutUpRight />
-                                        Ver Recursos & Procesos
-                                    </a>
-                                </SidebarMenuSubButton>
-                            </SidebarMenuItem>
-                        </SidebarMenu>
-                    </SidebarGroupContent>
-                </SidebarGroup>
+        <>
+            <Sidebar collapsible="icon">
+                <SidebarContent>
+                    <SidebarGroup>
+                        <SidebarGroupLabel>Aplicación</SidebarGroupLabel>
+                        <SidebarGroupContent>
+                            <SidebarMenu>
+                                <SidebarMenuItem>
+                                    <SidebarMenuSubButton asChild>
+                                        <a href="/">
+                                            <SquareArrowOutUpRight />
+                                            Ver Recursos & Procesos
+                                        </a>
+                                    </SidebarMenuSubButton>
+                                </SidebarMenuItem>
+                            </SidebarMenu>
+                        </SidebarGroupContent>
+                    </SidebarGroup>
 
-                <SidebarGroup>
-                    <SidebarGroupLabel className="gap-2">
-                        <span>Recursos</span>
-                    </SidebarGroupLabel>
+                    <SidebarGroup>
+                        <SidebarGroupLabel className="gap-2">
+                            <span>Recursos</span>
+                        </SidebarGroupLabel>
 
-                    <SidebarGroupAction title="Nuevo Recurso">
-                        <>
-                            <Dialog>
-                                <DialogTrigger asChild>
-                                    <Plus />
-                                </DialogTrigger>
-                                <DialogContent>
-                                    <DialogHeader>
-                                        <DialogTitle>Nuevo Recurso</DialogTitle>
-                                        <DialogDescription>
-                                            Complete los campos para agregar un nuevo recurso
-                                        </DialogDescription>
-                                    </DialogHeader>
-                                    <Form {...resourceForm}>
-                                        <form onSubmit={resourceForm.handleSubmit(onResourceSubmit)} className="space-y-6">
-                                            <FormField
-                                                control={resourceForm.control}
-                                                name="name"
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Nombre del Recurso</FormLabel>
-                                                        <FormControl>
-                                                            <Input {...field} />
-                                                        </FormControl>
-                                                        <FormDescription>
-                                                            {resourceForm.formState.errors.name?.message}
-                                                        </FormDescription>
-                                                        <FormMessage />
-                                                    </FormItem>
-                                                )}
-                                            />
-                                            <FormField
-                                                control={resourceForm.control}
-                                                name="totalAmount"
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Cantidad Total</FormLabel>
-                                                        <FormControl>
-                                                            <Input type="number" {...field} />
-                                                        </FormControl>
-                                                        <FormDescription>
-                                                            {resourceForm.formState.errors.totalAmount?.message}
-                                                        </FormDescription>
-                                                        <FormMessage />
-                                                    </FormItem>
-                                                )}
-                                            />
-                                            <DialogFooter>
-                                                <Button type="submit">Agregar Recurso</Button>
-                                            </DialogFooter>
-                                        </form>
-                                    </Form>
-                                </DialogContent>
-                            </Dialog>
-                        </>
-                    </SidebarGroupAction>
-
-                    <SidebarMenu>
-                        <Collapsible defaultOpen className="group/collapsible">
-                            <SidebarMenuItem>
-                                <CollapsibleTrigger asChild>
-                                    <SidebarMenuButton>
-                                        <Activity />
-                                        Recursos Disponibles
-                                        <ChevronDown className="ml-auto" />
-                                    </SidebarMenuButton>
-                                </CollapsibleTrigger>
-                                <CollapsibleContent>
-                                    <SidebarMenuSub>
-
-                                        {
-                                            SimulationData.resources.map((resource) => (
-                                                <SidebarMenuItem key={resource.id} className="flex">
-                                                    <SidebarMenuSubButton>
-                                                        <Link href={{
-                                                            pathname: `/recurso/`,
-                                                            query: { id: resource.id }
-                                                        }} className="flex gap-2">
-                                                            {resource.name}
-                                                            <Badge>{resource.id}</Badge>
-                                                        </Link>
-                                                    </SidebarMenuSubButton>
-                                                </SidebarMenuItem>
-                                            ))
-                                        }
-                                    </SidebarMenuSub>
-                                </CollapsibleContent>
-                            </SidebarMenuItem>
-                        </Collapsible>
-                    </SidebarMenu>
-                </SidebarGroup>
-
-                <SidebarGroup>
-                    <SidebarGroupLabel className="gap-2">
-                        <span>Procesos</span>
-                    </SidebarGroupLabel>
-                    <SidebarGroupAction>
-                        <>
-                            <Dialog>
-                                <DialogTrigger asChild>
-                                    <Plus />
-                                </DialogTrigger>
-                                <DialogContent>
-                                    <DialogHeader>
-                                        <DialogTitle>Nuevo Proceso</DialogTitle>
-                                        <DialogDescription>
-                                            Complete los campos para agregar un nuevo proceso
-                                        </DialogDescription>
-                                    </DialogHeader>
-                                    <Form {...processForm}>
-                                        <form onSubmit={processForm.handleSubmit(onProcessSubmit)} className="space-y-6">
-                                            <FormField
-                                                control={processForm.control}
-                                                name="name"
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Nombre del Proceso</FormLabel>
-                                                        <FormControl>
-                                                            <Input {...field} />
-                                                        </FormControl>
-                                                        <FormDescription>
-                                                            {processForm.formState.errors.name?.message}
-                                                        </FormDescription>
-                                                        <FormMessage />
-                                                    </FormItem>
-                                                )}
-                                            />
-                                            <FormField
-                                                control={processForm.control}
-                                                name="intensity"
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Intensidad en Memoria</FormLabel>
-                                                        <FormControl>
-                                                            <Input type="number" {...field} />
-                                                        </FormControl>
-                                                        <FormDescription>
-                                                            Entre mayor sea el valor, más memoria consumirá el proceso
-                                                        </FormDescription>
-                                                        <FormMessage />
-                                                    </FormItem>
-                                                )}
-                                            />
-
-                                            <FormField
-                                                control={processForm.control}
-                                                name="resources"
-                                                render={() => (
-                                                    <FormItem>
-                                                        <div className="mb-4">
-                                                            <FormLabel className="text-base">
-                                                                Recursos
-                                                            </FormLabel>
+                        <SidebarGroupAction title="Nuevo Recurso">
+                            <>
+                                <Dialog>
+                                    <DialogTrigger asChild>
+                                        <Plus />
+                                    </DialogTrigger>
+                                    <DialogContent>
+                                        <DialogHeader>
+                                            <DialogTitle>Nuevo Recurso</DialogTitle>
+                                            <DialogDescription>
+                                                Complete los campos para agregar un nuevo recurso
+                                            </DialogDescription>
+                                        </DialogHeader>
+                                        <Form {...resourceForm}>
+                                            <form onSubmit={resourceForm.handleSubmit(onResourceSubmit)} className="space-y-6">
+                                                <FormField
+                                                    control={resourceForm.control}
+                                                    name="name"
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel>Nombre del Recurso</FormLabel>
+                                                            <FormControl>
+                                                                <Input {...field} />
+                                                            </FormControl>
                                                             <FormDescription>
-                                                                Seleccione los recursos que necesita el proceso
+                                                                {resourceForm.formState.errors.name?.message}
                                                             </FormDescription>
-                                                        </div>
+                                                            <FormMessage />
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                                <FormField
+                                                    control={resourceForm.control}
+                                                    name="totalAmount"
+                                                    render={({ field }) => {
+                                                        const currentValue = field.value;
+                                                        return (
+                                                            <FormItem>
+                                                                <FormLabel>Cantidad Total</FormLabel>
+                                                                <Input
+                                                                    type="number"
+                                                                    placeholder="Cantidad"
+                                                                    defaultValue={currentValue}
+                                                                    disabled={!currentValue}
+                                                                    onChange={(e) => {
+                                                                        field.onChange(Number(e.target.value));
+                                                                    }}
+                                                                />
+                                                                <FormDescription>
+                                                                    {resourceForm.formState.errors.totalAmount?.message}
+                                                                </FormDescription>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )
+                                                    }
+                                                    }
+                                                />
+                                                <DialogFooter>
+                                                    <Button type="submit">Agregar Recurso</Button>
+                                                </DialogFooter>
+                                            </form>
+                                        </Form>
+                                    </DialogContent>
+                                </Dialog>
+                            </>
+                        </SidebarGroupAction>
 
-                                                        <ScrollArea className="h-36 rounded-sm border px-1">
-                                                            {SimulationData.resources.map((item) => (
-                                                                <FormField
-                                                                    key={item.id}
-                                                                    control={processForm.control}
-                                                                    name="resources"
-                                                                    render={({ field }) => {
-                                                                        const currentValue = Array.isArray(field.value) ? field.value : [];
-                                                                        return (
-                                                                            <div key={item.id} className="flex flex-row items-center m-2">
-                                                                                <FormItem
-                                                                                    className="flex flex-row items-start space-x-3 space-y-0 grow"
-                                                                                >
-                                                                                    <FormControl>
-                                                                                        <Checkbox
-                                                                                            checked={currentValue.some(resource => resource.id === item.id)}
-                                                                                            onCheckedChange={(checked) => {
-                                                                                                return checked
-                                                                                                    ? field.onChange([...currentValue, { id: item.id, totalAmount: 0 }])
-                                                                                                    : field.onChange(currentValue.filter((value) => value.id !== item.id));
-                                                                                            }}
-                                                                                        />
-                                                                                    </FormControl>
-                                                                                    <FormLabel className="text-sm font-normal">
-                                                                                        {item.name} ({item.id})
-                                                                                    </FormLabel>
-                                                                                </FormItem>
+                        <SidebarMenu>
+                            <Collapsible defaultOpen className="group/collapsible">
+                                <SidebarMenuItem>
+                                    <CollapsibleTrigger asChild>
+                                        <SidebarMenuButton>
+                                            <Activity />
+                                            Recursos Disponibles
+                                            <ChevronDown className="ml-auto" />
+                                        </SidebarMenuButton>
+                                    </CollapsibleTrigger>
+                                    <CollapsibleContent>
+                                        <SidebarMenuSub>
 
-                                                                                <FormItem className="flex flex-row gap-1 items-center">
-                                                                                    <FormControl>
-                                                                                        <>
+                                            {
+                                                SimulationData.resources.map((resource) => (
+                                                    <SidebarMenuItem key={resource.id} className="flex">
+                                                        <SidebarMenuSubButton>
+                                                            <Link href={{
+                                                                pathname: `/recurso/`,
+                                                                query: { id: resource.id }
+                                                            }} className="flex gap-2">
+                                                                {resource.name}
+                                                                <Badge>{resource.id}</Badge>
+                                                            </Link>
+                                                        </SidebarMenuSubButton>
+                                                    </SidebarMenuItem>
+                                                ))
+                                            }
+                                        </SidebarMenuSub>
+                                    </CollapsibleContent>
+                                </SidebarMenuItem>
+                            </Collapsible>
+                        </SidebarMenu>
+                    </SidebarGroup>
+
+                    <SidebarGroup>
+                        <SidebarGroupLabel className="gap-2">
+                            <span>Procesos</span>
+                        </SidebarGroupLabel>
+                        <SidebarGroupAction>
+                            <>
+                                <Dialog>
+                                    <DialogTrigger asChild>
+                                        <Plus />
+                                    </DialogTrigger>
+                                    <DialogContent>
+                                        <DialogHeader>
+                                            <DialogTitle>Nuevo Proceso</DialogTitle>
+                                            <DialogDescription>
+                                                Complete los campos para agregar un nuevo proceso
+                                            </DialogDescription>
+                                        </DialogHeader>
+                                        <Form {...processForm}>
+                                            <form onSubmit={processForm.handleSubmit(onProcessSubmit)} className="space-y-6">
+                                                <FormField
+                                                    control={processForm.control}
+                                                    name="name"
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel>Nombre del Proceso</FormLabel>
+                                                            <FormControl>
+                                                                <Input {...field} />
+                                                            </FormControl>
+                                                            <FormDescription>
+                                                                {processForm.formState.errors.name?.message}
+                                                            </FormDescription>
+                                                            <FormMessage />
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                                <FormField
+                                                    control={processForm.control}
+                                                    name="intensity"
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel>Intensidad en Memoria</FormLabel>
+                                                            <FormControl>
+                                                                <Input type="number" {...field} />
+                                                            </FormControl>
+                                                            <FormDescription>
+                                                                Entre mayor sea el valor, más memoria consumirá el proceso
+                                                            </FormDescription>
+                                                            <FormMessage />
+                                                        </FormItem>
+                                                    )}
+                                                />
+
+                                                <FormField
+                                                    control={processForm.control}
+                                                    name="resources"
+                                                    render={() => (
+                                                        <FormItem>
+                                                            <div className="mb-4">
+                                                                <FormLabel className="text-base">
+                                                                    Recursos
+                                                                </FormLabel>
+                                                                <FormDescription>
+                                                                    Seleccione los recursos que necesita el proceso
+                                                                </FormDescription>
+                                                            </div>
+
+                                                            <ScrollArea className="h-36 rounded-sm border px-1">
+                                                                {SimulationData.resources.map((item) => (
+                                                                    <FormField
+                                                                        key={item.id}
+                                                                        control={processForm.control}
+                                                                        name="resources"
+                                                                        render={({ field }) => {
+                                                                            const currentValue = Array.isArray(field.value) ? field.value : [];
+                                                                            return (
+                                                                                <div key={item.id} className="flex flex-row items-center m-2">
+                                                                                    <FormItem
+                                                                                        className="flex flex-row items-start space-x-3 space-y-0 grow"
+                                                                                    >
+                                                                                        <FormControl>
+                                                                                            <Checkbox
+                                                                                                checked={currentValue.some(resource => resource.id === item.id)}
+                                                                                                onCheckedChange={(checked) => {
+                                                                                                    return checked
+                                                                                                        ? field.onChange([...currentValue, { id: item.id, totalAmount: 0 }])
+                                                                                                        : field.onChange(currentValue.filter((value) => value.id !== item.id));
+                                                                                                }}
+                                                                                            />
+                                                                                        </FormControl>
+                                                                                        <FormLabel className="text-sm font-normal">
+                                                                                            {item.name} ({item.id})
+                                                                                        </FormLabel>
+                                                                                    </FormItem>
+
+                                                                                    <FormItem className="flex flex-row gap-1 items-center">
+                                                                                        <FormControl>
                                                                                             <Input
                                                                                                 type="number"
                                                                                                 placeholder="Cantidad"
@@ -476,203 +508,298 @@ export function AppSidebar() {
                                                                                                     field.onChange(newResources);
                                                                                                 }}
                                                                                             />
-                                                                                        </>
-                                                                                    </FormControl>
-                                                                                </FormItem>
-                                                                            </div>
-                                                                        );
-                                                                    }}
-                                                                />
-                                                            ))}
-                                                        </ScrollArea>
+                                                                                        </FormControl>
+                                                                                    </FormItem>
+                                                                                </div>
+                                                                            );
+                                                                        }}
+                                                                    />
+                                                                ))}
+                                                            </ScrollArea>
 
-                                                    </FormItem>
-                                                )}
-                                            />
-                                            <DialogFooter>
-                                                <Button type="submit">Agregar Proceso</Button>
-                                            </DialogFooter>
-                                        </form>
-                                    </Form>
-                                </DialogContent>
-                            </Dialog>
-                        </>
-                    </SidebarGroupAction>
-                    <SidebarMenu>
-                        <Collapsible defaultOpen className="group/collapsible">
-                            <SidebarMenuItem>
-                                <CollapsibleTrigger asChild>
-                                    <SidebarMenuButton>
-                                        <List />
-                                        <span>Procesos En Memoria</span>
-                                        <ChevronDown className="ml-auto" />
-                                    </SidebarMenuButton>
-                                </CollapsibleTrigger>
-                                <CollapsibleContent>
-                                    <SidebarMenuSub>
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                                <DialogFooter>
+                                                    <Button type="submit">Agregar Proceso</Button>
+                                                </DialogFooter>
+                                            </form>
+                                        </Form>
+                                    </DialogContent>
+                                </Dialog>
+                            </>
+                        </SidebarGroupAction>
+                        <SidebarMenu>
+                            <Collapsible defaultOpen className="group/collapsible">
+                                <SidebarMenuItem>
+                                    <CollapsibleTrigger asChild>
+                                        <SidebarMenuButton>
+                                            <List />
+                                            <span>Procesos En Memoria</span>
+                                            <ChevronDown className="ml-auto" />
+                                        </SidebarMenuButton>
+                                    </CollapsibleTrigger>
+                                    <CollapsibleContent>
+                                        <SidebarMenuSub>
+                                            {
+                                                SimulationData.processes.map((process) => (
+                                                    <SidebarMenuItem key={process.Ready.id} className="flex">
+                                                        <SidebarMenuSubButton>
+                                                            <Link href={{
+                                                                pathname: `/proceso/`,
+                                                                query: { id: process.Ready.id }
+                                                            }} className="flex gap-2">
+                                                                {process.Ready.name}
+                                                                <Badge>{process.Ready.id}</Badge>
+                                                            </Link>
+                                                        </SidebarMenuSubButton>
+                                                    </SidebarMenuItem>
+                                                ))
+                                            }
+                                        </SidebarMenuSub>
+                                    </CollapsibleContent>
+                                </SidebarMenuItem>
+                            </Collapsible>
+                        </SidebarMenu>
+                    </SidebarGroup>
+                </SidebarContent>
+
+                <SidebarFooter>
+                    <SidebarGroup>
+                        <SidebarGroupLabel className="gap-2">
+                            <RectangleEllipsis />
+                            <span>Sistema</span>
+                        </SidebarGroupLabel>
+                        <SidebarGroupContent>
+                            <SidebarMenu className="my-3">
+                                <SidebarMenuItem className="flex justify-center">
+                                    <ToggleGroup type="single">
                                         {
-                                            SimulationData.processes.map((process) => (
-                                                <SidebarMenuItem key={process.Ready.id} className="flex">
-                                                    <SidebarMenuSubButton>
-                                                        <Link href={{
-                                                            pathname: `/proceso/`,
-                                                            query: { id: process.Ready.id }
-                                                        }} className="flex gap-2">
-                                                            {process.Ready.name}
-                                                            <Badge>{process.Ready.id}</Badge>
-                                                        </Link>
-                                                    </SidebarMenuSubButton>
-                                                </SidebarMenuItem>
-                                            ))
+                                            SimulationData.simulationState === "stopped" ?
+                                                <ToggleGroupItem value="continue" aria-label="Reanudar"
+                                                    onClick={() => {
+                                                        SimulationData.updateSimulationState("running")
+                                                    }}
+                                                >
+                                                    <TooltipProvider>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <Play className="h-5 w-5 text-green-300" />
+                                                            </TooltipTrigger>
+                                                            <TooltipContent className="dark:bg-black/30 bg-black/5 backdrop-blur-3xl p-2 rounded-md border dark:border-white/10 border-black/10">
+                                                                <p>Continuar Simulación</p>
+                                                            </TooltipContent>
+                                                        </Tooltip>
+                                                    </TooltipProvider>
+                                                </ToggleGroupItem>
+                                                :
+                                                <ToggleGroupItem value="pause" aria-label="Pausar"
+                                                    onClick={() => {
+                                                        SimulationData.updateSimulationState("stopped")
+                                                    }}
+                                                >
+                                                    <TooltipProvider>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <Pause className="h-5 w-5 text-blue-300" />
+                                                            </TooltipTrigger>
+                                                            <TooltipContent className="dark:bg-black/30 bg-black/5 backdrop-blur-3xl p-2 rounded-md border dark:border-white/10 border-black/10">
+                                                                <p>Pausar Simulación</p>
+                                                            </TooltipContent>
+                                                        </Tooltip>
+                                                    </TooltipProvider>
+                                                </ToggleGroupItem>
+
                                         }
-                                    </SidebarMenuSub>
-                                </CollapsibleContent>
-                            </SidebarMenuItem>
-                        </Collapsible>
+                                    </ToggleGroup>
+                                </SidebarMenuItem>
+                            </SidebarMenu>
+
+                            <SidebarMenu className="my-3">
+                                <SidebarMenuItem>
+                                    <ToggleGroup type="single" className="flex flex-wrap justify-evenly">
+                                        <ToggleGroupItem value="stop" aria-label="Parar"
+                                            onClick={() => {
+                                                if (SimulationData.simulationSpeed > 0) SimulationData.updateSimulationSpeed(SimulationData.simulationSpeed - 1)
+                                            }}
+                                        >
+                                            <TooltipProvider>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <Minus className="h-5 w-5" />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent className="dark:bg-black/30 bg-black/5 backdrop-blur-3xl p-2 rounded-md border dark:border-white/10 border-black/10">
+                                                        <p>Disminuir TPS</p>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
+                                        </ToggleGroupItem>
+                                        <ToggleGroupItem value="pause" aria-label="Pausar">
+                                            <TooltipProvider>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild className="flex justify-center">
+                                                        <span>
+                                                            {SimulationData.simulationSpeed}
+                                                        </span>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent className="dark:bg-black/30 bg-black/5 backdrop-blur-3xl p-2 rounded-md border dark:border-white/10 border-black/10">
+                                                        <p>Ticks por segundo</p>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
+                                        </ToggleGroupItem>
+                                        <ToggleGroupItem value="continue" aria-label="Reanudar"
+                                            onClick={() => {
+                                                SimulationData.updateSimulationSpeed(SimulationData.simulationSpeed + 1)
+                                                // setSimulationSpeed(simulationSpeed + 1)
+                                            }}
+                                        >
+                                            <TooltipProvider>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <Plus className="h-5 w-5" />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent className="dark:bg-black/30 bg-black/5 backdrop-blur-3xl p-2 rounded-md border dark:border-white/10 border-black/10">
+                                                        <p>Aumentar TPS</p>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
+                                        </ToggleGroupItem>
+                                    </ToggleGroup>
+                                </SidebarMenuItem>
+                            </SidebarMenu>
+                        </SidebarGroupContent>
+                    </SidebarGroup>
+
+
+                    <SidebarMenu>
+                        <SidebarMenuItem>
+                            <SidebarMenuButton asChild>
+                                <a>
+                                    <Palette />
+                                    <span>Tema</span>
+                                </a>
+                            </SidebarMenuButton>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <SidebarMenuAction>
+                                        <MoreHorizontal />
+                                    </SidebarMenuAction>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent className="dark:bg-black/10 bg-white/85 backdrop-blur-3xl p-1 px-2 rounded-sm border dark:border-white/10 border-black/10">
+                                    <DropdownMenuItem className="hover:dark:bg-white/10 hover:bg-black/10 rounded-sm px-2 py-1 cursor-pointer my-1 flex gap-2" onClick={() => { setTheme("light") }}>
+                                        <Sun />
+                                        <span>Claro</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="hover:dark:bg-white/10 hover:bg-black/10 rounded-sm px-2 py-1 cursor-pointer my-1 flex gap-2" onClick={() => { setTheme("dark") }}>
+                                        <Moon />
+                                        <span>Oscuro</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="hover:dark:bg-white/10 hover:bg-black/10 rounded-sm px-2 py-1 cursor-pointer my-1 flex gap-2" onClick={() => { setTheme("system") }}>
+                                        <Laptop />
+                                        <span>Definido por el Sistema</span>
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </SidebarMenuItem>
                     </SidebarMenu>
-                </SidebarGroup>
-            </SidebarContent>
+                </SidebarFooter>
+            </Sidebar >
 
-            <SidebarFooter>
-                <SidebarGroup>
-                    <SidebarGroupLabel className="gap-2">
-                        <RectangleEllipsis />
-                        <span>Sistema</span>
-                    </SidebarGroupLabel>
-                    <SidebarGroupContent>
-                        <SidebarMenu className="my-3">
-                            <SidebarMenuItem className="flex justify-center">
-                                <ToggleGroup type="single">
-                                    {
-                                        SimulationData.simulationState === "stopped" ?
-                                            <ToggleGroupItem value="continue" aria-label="Reanudar"
-                                                onClick={() => {
-                                                    SimulationData.updateSimulationState("running")
-                                                }}
-                                            >
-                                                <TooltipProvider>
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Play className="h-5 w-5 text-green-300" />
-                                                        </TooltipTrigger>
-                                                        <TooltipContent className="dark:bg-black/30 bg-black/5 backdrop-blur-3xl p-2 rounded-md border dark:border-white/10 border-black/10">
-                                                            <p>Continuar Simulación</p>
-                                                        </TooltipContent>
-                                                    </Tooltip>
-                                                </TooltipProvider>
-                                            </ToggleGroupItem>
-                                            :
-                                            <ToggleGroupItem value="pause" aria-label="Pausar"
-                                                onClick={() => {
-                                                    SimulationData.updateSimulationState("stopped")
-                                                }}
-                                            >
-                                                <TooltipProvider>
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Pause className="h-5 w-5 text-blue-300" />
-                                                        </TooltipTrigger>
-                                                        <TooltipContent className="dark:bg-black/30 bg-black/5 backdrop-blur-3xl p-2 rounded-md border dark:border-white/10 border-black/10">
-                                                            <p>Pausar Simulación</p>
-                                                        </TooltipContent>
-                                                    </Tooltip>
-                                                </TooltipProvider>
-                                            </ToggleGroupItem>
+            <Dialog open={SimulationData.processToDelete.length > 0}>
+                <DialogContent className="sm:max-w-[425px] bg-red-600">
+                    <DialogHeader>
+                        <DialogTitle>Estado Inseguro Prevenido</DialogTitle>
+                        <DialogDescription className="text-white/90">
+                            Por favor, revise los procesos sugeridos para eliminar.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div>
+                        <Form {...processForm}>
+                            <form onSubmit={processToDeleteForm.handleSubmit(onProcessToDeleteSubmit)} className="space-y-6">
+                                <FormField
+                                    control={processToDeleteForm.control}
+                                    name="id"
+                                    render={() => (
+                                        <FormItem>
+                                            <ScrollArea className="h-36 rounded-sm border px-1 border-white">
+                                                {SimulationData.processToDelete.map((process) => (
+                                                    <FormField
+                                                        key={process.Ready.id}
+                                                        control={processToDeleteForm.control}
+                                                        name="id"
+                                                        render={({ field }) => {
+                                                            const currentValue = Array.isArray(field.value) ? field.value : [];
+                                                            return (
+                                                                <div key={process.Ready.id} className="flex flex-row items-center m-2">
+                                                                    <FormItem
+                                                                        className="flex flex-row items-start space-x-3 space-y-0 grow"
+                                                                    >
+                                                                        <FormControl>
+                                                                            <Checkbox
+                                                                                checked={currentValue.some(process => process.id === process.id)}
+                                                                                // onCheckedChange={(checked) => {
+                                                                                //     console.log("checked", checked);
+                                                                                //     return checked
+                                                                                //         ? field.onChange([...currentValue, {
+                                                                                //             id: process.Ready.id,
+                                                                                //         }
+                                                                                //         ])
+                                                                                //         : field.onChange(currentValue.filter((value) => value.id !== process.Ready.id));
+                                                                                // }}
+                                                                                // onChange={(e) => {
+                                                                                //     // const value = e.target.value;
+                                                                                //     // const index = currentValue.findIndex(resource => resource.id === item.id);
+                                                                                //     // const newResources = [...currentValue];
+                                                                                //     // newResources[index] = { id: item.id, totalAmount: parseInt(value) };
+                                                                                //     // field.onChange(newResources);
 
-                                    }
-                                </ToggleGroup>
-                            </SidebarMenuItem>
-                        </SidebarMenu>
+                                                                                //     console.log("e", e);
+                                                                                // }}
 
-                        <SidebarMenu className="my-3">
-                            <SidebarMenuItem>
-                                <ToggleGroup type="single" className="flex flex-wrap justify-evenly">
-                                    <ToggleGroupItem value="stop" aria-label="Parar"
-                                        onClick={() => {
-                                            if (SimulationData.simulationSpeed > 0) SimulationData.updateSimulationSpeed(SimulationData.simulationSpeed - 1)
-                                        }}
-                                    >
-                                        <TooltipProvider>
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <Minus className="h-5 w-5" />
-                                                </TooltipTrigger>
-                                                <TooltipContent className="dark:bg-black/30 bg-black/5 backdrop-blur-3xl p-2 rounded-md border dark:border-white/10 border-black/10">
-                                                    <p>Disminuir TPS</p>
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        </TooltipProvider>
-                                    </ToggleGroupItem>
-                                    <ToggleGroupItem value="pause" aria-label="Pausar">
-                                        <TooltipProvider>
-                                            <Tooltip>
-                                                <TooltipTrigger asChild className="flex justify-center">
-                                                    <span>
-                                                        {SimulationData.simulationSpeed}
-                                                    </span>
-                                                </TooltipTrigger>
-                                                <TooltipContent className="dark:bg-black/30 bg-black/5 backdrop-blur-3xl p-2 rounded-md border dark:border-white/10 border-black/10">
-                                                    <p>Ticks por segundo</p>
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        </TooltipProvider>
-                                    </ToggleGroupItem>
-                                    <ToggleGroupItem value="continue" aria-label="Reanudar"
-                                        onClick={() => {
-                                            SimulationData.updateSimulationSpeed(SimulationData.simulationSpeed + 1)
-                                            // setSimulationSpeed(simulationSpeed + 1)
-                                        }}
-                                    >
-                                        <TooltipProvider>
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <Plus className="h-5 w-5" />
-                                                </TooltipTrigger>
-                                                <TooltipContent className="dark:bg-black/30 bg-black/5 backdrop-blur-3xl p-2 rounded-md border dark:border-white/10 border-black/10">
-                                                    <p>Aumentar TPS</p>
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        </TooltipProvider>
-                                    </ToggleGroupItem>
-                                </ToggleGroup>
-                            </SidebarMenuItem>
-                        </SidebarMenu>
-                    </SidebarGroupContent>
-                </SidebarGroup>
+                                                                                onCheckedChange={(checked) => {
+                                                                                    return checked
+                                                                                        ? field.onChange([...currentValue, { id: process.Ready.id }])
+                                                                                        : field.onChange(currentValue.filter((value) => value.id !== process.Ready.id));
+                                                                                }}
+
+                                                                                
+                                                                            />
+                                                                        </FormControl>
+                                                                        <FormLabel className="text-sm font-normal flex flex-row gap-2">
+                                                                            <p>
 
 
-                <SidebarMenu>
-                    <SidebarMenuItem>
-                        <SidebarMenuButton asChild>
-                            <a>
-                                <Palette />
-                                <span>Tema</span>
-                            </a>
-                        </SidebarMenuButton>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <SidebarMenuAction>
-                                    <MoreHorizontal />
-                                </SidebarMenuAction>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent className="dark:bg-black/10 bg-white/85 backdrop-blur-3xl p-1 px-2 rounded-sm border dark:border-white/10 border-black/10">
-                                <DropdownMenuItem className="hover:dark:bg-white/10 hover:bg-black/10 rounded-sm px-2 py-1 cursor-pointer my-1 flex gap-2" onClick={() => { setTheme("light") }}>
-                                    <Sun />
-                                    <span>Claro</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem className="hover:dark:bg-white/10 hover:bg-black/10 rounded-sm px-2 py-1 cursor-pointer my-1 flex gap-2" onClick={() => { setTheme("dark") }}>
-                                    <Moon />
-                                    <span>Oscuro</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem className="hover:dark:bg-white/10 hover:bg-black/10 rounded-sm px-2 py-1 cursor-pointer my-1 flex gap-2" onClick={() => { setTheme("system") }}>
-                                    <Laptop />
-                                    <span>Definido por el Sistema</span>
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </SidebarMenuItem>
-                </SidebarMenu>
-            </SidebarFooter>
-        </Sidebar >
+                                                                                {
+                                                                                    // Find the process in the processes array with the same id
+                                                                                    SimulationData.processes.find((p) => p.Ready.id === process.Ready.id)?.Ready.name
+                                                                                }
+                                                                            </p>
+                                                                            <p>
+                                                                                ({
+                                                                                    process.Ready.id
+                                                                                })
+                                                                            </p>
+                                                                        </FormLabel>
+                                                                    </FormItem>
+                                                                </div>
+                                                            );
+                                                        }}
+                                                    />
+                                                ))}
+                                            </ScrollArea>
+                                        </FormItem>
+                                    )}
+                                />
+                                <DialogFooter className="grid grid-cols-2">
+                                    <Button type="submit" variant="destructive">Continuar (inseguro)</Button>
+                                    <Button type="submit">Eliminar procesos</Button>
+                                </DialogFooter>
+                            </form>
+                        </Form>
+                    </div>
+                </DialogContent>
+            </Dialog>
+        </>
     )
 }

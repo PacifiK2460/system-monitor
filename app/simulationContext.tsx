@@ -1,18 +1,25 @@
 "use client"
 
 import { Process, Resource } from "@/lib/defs";
-import { invoke } from "@tauri-apps/api/tauri";
+import { invoke } from "@tauri-apps/api/core";
 import React, { createContext, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { EventCallback, EventName, UnlistenFn } from '@tauri-apps/api/event';
+
 type SimulationData = {
   processes: Process[];
   resources: Resource[];
   simulationSpeed: number;
   simulationState: "stopped" | "running";
 
+  processToDelete: Process[];
+  updateProcessesToDelete: (newProcesses: Process[]) => void;
+
   updateProcesses: (newProcesses: Process[]) => void;
   updateResources: (newResources: Resource[]) => void;
   updateSimulationSpeed: (newSpeed: number) => void;
   updateSimulationState: (newState: "stopped" | "running") => void;
+
+  listen: <T>(event: EventName, handler: EventCallback<T>) => Promise<UnlistenFn>;
 };
 
 interface SimulationProviderProps {
@@ -24,10 +31,14 @@ export const SimulationContext = createContext<SimulationData>({
   resources: [],
   simulationSpeed: 1,
   simulationState: "running",
+  processToDelete: [],
+  updateProcessesToDelete: () => { },
   updateProcesses: () => { },
   updateResources: () => { },
   updateSimulationSpeed: () => { },
   updateSimulationState: () => { },
+
+  listen: async () => { return () => { } },
 })
 
 export const SimulationProvider = ({ children }: SimulationProviderProps) => {
@@ -36,10 +47,14 @@ export const SimulationProvider = ({ children }: SimulationProviderProps) => {
     resources: [],
     simulationSpeed: 1,
     simulationState: "running",
+    processToDelete: [],
+    updateProcessesToDelete: () => { },
     updateProcesses: () => { },
     updateResources: () => { },
     updateSimulationSpeed: () => { },
     updateSimulationState: () => { },
+
+    listen: async () => { return () => { } },
   });
 
   const updateProcesses = useCallback((newProcesses: Process[]) => {
@@ -79,21 +94,39 @@ export const SimulationProvider = ({ children }: SimulationProviderProps) => {
     }));
   }, []);
 
+  const updatePorcessToDelete = useCallback((newProcesses: Process[]) => {
+    setSimulationData((prev) => ({
+      ...prev,
+      processToDelete: newProcesses,
+    }));
+  }, []);
+
+  async function setupListen() {
+    const listen = (await import('@tauri-apps/api/event')).listen
+    setSimulationData((prev) => ({
+      ...prev,
+      listen: listen,
+    }));
+  }
+
   const simulationDataValue = useMemo(() => ({
     processes: simulationData.processes,
     resources: simulationData.resources,
     simulationSpeed: simulationData.simulationSpeed,
     simulationState: simulationData.simulationState,
+    processToDelete: simulationData.processToDelete,
+    updateProcessesToDelete: updatePorcessToDelete,
     updateProcesses,
     updateResources,
     updateSimulationSpeed,
     updateSimulationState,
-  }), [simulationData.processes, simulationData.resources, simulationData.simulationSpeed, simulationData.simulationState, updateProcesses, updateResources, updateSimulationSpeed, updateSimulationState]);
+    listen: simulationData.listen,
+  }), [simulationData.listen, simulationData.processToDelete, simulationData.processes, simulationData.resources, simulationData.simulationSpeed, simulationData.simulationState, updatePorcessToDelete, updateProcesses, updateResources, updateSimulationSpeed, updateSimulationState]);
 
   useEffect(() => {
     invoke("simulation_resources")
       .then((res) => {
-        updateResources(res as Resource[])
+        simulationDataValue.updateResources(res as Resource[])
       })
       .catch((error) => {
         console.error("Error getting resources", error)
@@ -101,11 +134,13 @@ export const SimulationProvider = ({ children }: SimulationProviderProps) => {
 
     invoke("simulation_processes")
       .then((pros) => {
-        updateProcesses(pros as Process[])
+        simulationDataValue.updateProcesses(pros as Process[])
       })
       .catch((error) => {
         console.error("Error getting processes", error)
       })
+
+    setupListen()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -113,6 +148,21 @@ export const SimulationProvider = ({ children }: SimulationProviderProps) => {
     invoke("simulation_set_simulation_speed", { speed: simulationData.simulationSpeed })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [simulationData.simulationSpeed])
+
+  simulationDataValue.listen<string[]>("unsafe_state", (event) => {
+    const _processes: string[] = event.payload;
+
+    // Search for the processes with the ids inside the _processes array
+    const processes: Process[] = simulationDataValue.processes.filter((process) => {
+      return _processes.includes(process.Ready.id);
+    });
+
+    console.log("unsafe_state", event.payload)
+
+    simulationDataValue.updateProcessesToDelete(processes);
+    simulationDataValue.updateSimulationSpeed(0);
+    simulationDataValue.updateSimulationState("stopped");
+  })
 
   return (
     <SimulationContext.Provider value={simulationDataValue}>
